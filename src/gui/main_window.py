@@ -1,8 +1,9 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QComboBox, QDialog, QFormLayout, QSpinBox, QFileDialog
-from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QComboBox, QDialog, QFormLayout, QSpinBox, QFileDialog, QDoubleSpinBox
 from src.idkROM_v0 import idkROM  # Importar la clase base idkROM
-import numpy as np
 import pandas as pd
+from src.models.neural_network import NeuralNetworkROM
+from src.models.gaussian_process import GaussianProcessROM
+
 
 class ROMApp(QWidget):
     def __init__(self):
@@ -56,66 +57,92 @@ class ROMApp(QWidget):
         file_path, _ = QFileDialog.getOpenFileName(self, "Seleccionar archivo CSV", "")
         if file_path:
             try:
-                # Leer el CSV (ajusta el delimiter y decimal según tu archivo)
-                df = pd.read_csv(file_path, delimiter=",", decimal=".")
-                # Mostrar estado de carga
-                self.result_label.setText("Datos cargados correctamente.")
                 # Dependiendo de la opción seleccionada, se preprocesan o se usan tal cual
                 data_source = self.data_source_combobox.currentText()
+
                 if data_source == "Datos crudos":
                     # Preprocesar: se ejecuta el método preprocessing que normaliza, elimina outliers, etc.
+                    df = pd.read_csv(file_path, delimiter=",", decimal=".")
                     rom = idkROM()
                     self.inputs, self.outputs = rom.preprocessing(df)
+
                 else:  # Datos preprocesados
                     # Se asume que el CSV ya contiene los datos normalizados, con las primeras 7 columnas como inputs
                     # y el resto como outputs
+                    df = pd.read_csv(file_path, delimiter=";", decimal=".")
                     self.inputs = df.iloc[:, :7]
                     self.outputs = df.iloc[:, 7:]
+
+                self.result_label.setText("Datos cargados correctamente.")
+
                 self.data = df  # Guarda el DataFrame (puedes ajustar según necesites)
                 self.result_label.setText("Datos procesados correctamente.")
             except Exception as e:
                 self.result_label.setText(f"Error al cargar los datos: {str(e)}")
+
 
     def train_model(self):
         if self.data is None:
             self.result_label.setText("Error: No se han cargado datos.")
             return
 
-        # Obtener el modelo seleccionado
         model_name = self.model_combobox.currentText()
-        
-        # Obtener los datos (convertir a valores numpy)
         X_train = self.inputs.values
         y_train = self.outputs.values
 
-        # Si se selecciona "Neural Network", mostrar el cuadro de diálogo para configurar parámetros
+        model = None  # Asegurarnos de que el modelo esté vacío inicialmente
+
+        # Crear el cuadro de diálogo según el modelo seleccionado
         if model_name == "Neural Network":
             dialog = NeuralNetworkConfigDialog(self)
             if dialog.exec() == QDialog.DialogCode.Accepted:
                 hidden_layers = dialog.hidden_layers_spinbox.value()
                 neurons_per_layer = dialog.neurons_per_layer_spinbox.value()
                 activation_function = dialog.activation_function_combobox.currentText()
-                # Importante: se debe especificar la dimensión de salida según el número de columnas de y_train
-                model = idkROM.NeuralNetworkROM(input_dim=X_train.shape[1],
-                                                output_dim=y_train.shape[1],
-                                                hidden_layers=hidden_layers,
-                                                neurons_per_layer=neurons_per_layer,
-                                                activation_function=activation_function)
+                learning_rate = dialog.learning_rate_spinbox.value()
+                num_epochs = dialog.num_epochs_spinbox.value()
+                optimizer_type = dialog.optimizer_combobox.currentText()
+
+                model = NeuralNetworkROM(input_dim=X_train.shape[1],
+                                        output_dim=y_train.shape[1],
+                                        hidden_layers=hidden_layers,
+                                        neurons_per_layer=neurons_per_layer,
+                                        activation_function=activation_function,
+                                        learning_rate=learning_rate,
+                                        optimizer_type=optimizer_type,
+                                        num_epochs=num_epochs)
+                print(hidden_layers, neurons_per_layer, activation_function, learning_rate, optimizer_type, num_epochs)
+            
+            # Entrenar el modelo
+            if model is not None:
+                model.train(X_train, y_train, num_epochs=num_epochs)
+        
         elif model_name == "RBF":
             model = idkROM.RBFROM()
+
         elif model_name == "Response Surface":
             model = idkROM.ResponseSurfaceROM(degree=2)
+
         elif model_name == "Gaussian Process":
-            model = idkROM.GaussianProcessROM()
+            dialog = GaussianProcessConfigDialog(self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                kernel, noise, optimizer = dialog.get_config()
+                model = GaussianProcessROM(kernel=kernel, noise=noise, optimizer=optimizer)
+            if model is not None:
+                    model.train(X_train, y_train)
+
         elif model_name == "SVR":
             model = idkROM.SVRROM()
 
-        # Entrenar el modelo
-        model.train(X_train, y_train)
+        # Verificar si el usuario canceló la selección del modelo
+        if model is None:
+            self.result_label.setText("Operación cancelada.")
+            return
 
         # Evaluar el modelo
         mse = model.score(X_train, y_train)
         self.result_label.setText(f"Modelo entrenado, MSE: {mse:.4f}")
+
 
 class NeuralNetworkConfigDialog(QDialog):
     def __init__(self, parent=None):
@@ -127,15 +154,15 @@ class NeuralNetworkConfigDialog(QDialog):
         # Configurar número de capas ocultas
         self.hidden_layers_spinbox = QSpinBox(self)
         self.hidden_layers_spinbox.setMinimum(1)
-        self.hidden_layers_spinbox.setMaximum(10)
-        self.hidden_layers_spinbox.setValue(2)  # Valor por defecto
+        self.hidden_layers_spinbox.setMaximum(50)
+        self.hidden_layers_spinbox.setValue(2)
         layout.addRow("Número de capas ocultas:", self.hidden_layers_spinbox)
 
         # Configurar neuronas por capa
         self.neurons_per_layer_spinbox = QSpinBox(self)
         self.neurons_per_layer_spinbox.setMinimum(1)
         self.neurons_per_layer_spinbox.setMaximum(200)
-        self.neurons_per_layer_spinbox.setValue(50)  # Valor por defecto
+        self.neurons_per_layer_spinbox.setValue(50)
         layout.addRow("Neurona por capa:", self.neurons_per_layer_spinbox)
 
         # Configurar función de activación
@@ -143,9 +170,71 @@ class NeuralNetworkConfigDialog(QDialog):
         self.activation_function_combobox.addItems(["Tanh", "ReLU", "Sigmoid"])
         layout.addRow("Función de activación:", self.activation_function_combobox)
 
+        # Configurar Learning Rate con más precisión
+        self.learning_rate_spinbox = QDoubleSpinBox(self)
+        self.learning_rate_spinbox.setRange(1e-6, 1)  # Ajusta el rango según sea necesario
+        self.learning_rate_spinbox.setDecimals(5)  # Establece la cantidad de decimales a 5
+        self.learning_rate_spinbox.setSingleStep(1e-5)  # Ajusta el paso entre valores
+        self.learning_rate_spinbox.setValue(1e-3)  # Establecer el valor por defecto a 1e-3
+        layout.addRow("Learning Rate:", self.learning_rate_spinbox)
+
+        # Configurar número de épocas
+        self.num_epochs_spinbox = QSpinBox(self)
+        self.num_epochs_spinbox.setMinimum(100)
+        self.num_epochs_spinbox.setMaximum(100000)
+        self.num_epochs_spinbox.setValue(1000)
+        layout.addRow("Número de épocas:", self.num_epochs_spinbox)
+
+        # Configurar optimizador
+        self.optimizer_combobox = QComboBox(self)
+        self.optimizer_combobox.addItems(["Adam", "SGD", "RMSprop"])
+        layout.addRow("Seleccionar optimizador:", self.optimizer_combobox)
+
         # Botones de aceptar y cancelar
         self.accept_button = QPushButton("Aceptar", self)
         self.accept_button.clicked.connect(self.accept)
         self.reject_button = QPushButton("Cancelar", self)
         self.reject_button.clicked.connect(self.reject)
         layout.addRow(self.accept_button, self.reject_button)
+
+
+class GaussianProcessConfigDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.setWindowTitle("Configuración del Proceso Gaussiano")
+        layout = QFormLayout(self)
+
+        # Configurar el kernel
+        self.kernel_combobox = QComboBox(self)
+        self.kernel_combobox.addItems(["RBF", "Matern"])
+        layout.addRow("Seleccionar Kernel:", self.kernel_combobox)
+
+        # Configurar Noise (nivel de ruido)
+        self.noise_spinbox = QDoubleSpinBox(self)
+        self.noise_spinbox.setRange(1e-6, 1)
+        self.noise_spinbox.setDecimals(5)
+        self.noise_spinbox.setValue(1e-2)
+        layout.addRow("Nivel de Ruido (alpha):", self.noise_spinbox)
+
+        # Configurar optimizador (en lugar de Sí/No, usar valores correctos)
+        self.optimizer_combobox = QComboBox(self)
+        self.optimizer_combobox.addItems(["fmin_l_bfgs_b", "None"])
+        layout.addRow("¿Optimizar kernel?", self.optimizer_combobox)
+
+        # Botones de aceptar y cancelar
+        self.accept_button = QPushButton("Aceptar", self)
+        self.accept_button.clicked.connect(self.accept)
+        self.reject_button = QPushButton("Cancelar", self)
+        self.reject_button.clicked.connect(self.reject)
+        layout.addRow(self.accept_button, self.reject_button)
+
+    def get_config(self):
+        """Retorna la configuración seleccionada del cuadro de diálogo."""
+        kernel = self.kernel_combobox.currentText()
+        noise = self.noise_spinbox.value()
+        optimizer = self.optimizer_combobox.currentText()
+        # Convertir "None" a None (valor nulo de Python)
+        if optimizer == "None":
+            optimizer = None
+        return kernel, noise, optimizer
