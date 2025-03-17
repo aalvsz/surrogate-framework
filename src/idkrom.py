@@ -7,9 +7,9 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 import joblib
 import pandas as pd
+from abc import abstractmethod
 
 class idkROM:
-    output_folder = None
 
     def __init__(self):
         self.scaler = StandardScaler()
@@ -30,7 +30,9 @@ class idkROM:
         report = ProfileReport(data, title='Report', minimal=True)
 
         # exportar reporte a html
-        report.to_file(os.path.join(idkROM.output_folder, 'train_profiling_report.html'))
+        output_folder = os.path.join(os.getcwd(), 'results')
+        os.makedirs(os.path.dirname(output_folder), exist_ok=True)
+        report.to_file(os.path.join(output_folder,'train_profiling_report.html'))
         
         
         def boxplot(data):
@@ -48,7 +50,7 @@ class idkROM:
             for j in range(i + 1, len(axes.flatten())):
                 fig.delaxes(axes.flatten()[j])
 
-            plt.savefig(os.path.join(idkROM.output_folder, "preprocessed_data.png"))
+            plt.savefig(os.path.join(output_folder, "preprocessed_data.png"))
             plt.close(fig)
 
         #print('Box plot for input & output variables')
@@ -63,7 +65,7 @@ class idkROM:
         scaler = MinMaxScaler()
         df_normalized = pd.DataFrame(scaler.fit_transform(df_filtered), columns=df_filtered.columns)
 
-        joblib.dump(scaler, os.path.join(idkROM.output_folder, 'scaler.pkl'))
+        joblib.dump(scaler, os.path.join(output_folder, 'scaler.pkl'))
 
         boxplot(df_normalized)
 
@@ -73,7 +75,7 @@ class idkROM:
         y_normalized = df_normalized[self.outputs.columns]
 
         # Guardar los datos preprocesados en un CSV
-        preprocessed_file_path = os.path.join(idkROM.output_folder, 'preprocessed_data.csv')
+        preprocessed_file_path = os.path.join(output_folder, 'preprocessed_data.csv')
         df_normalized.to_csv(preprocessed_file_path, index=False, sep=";", decimal=".")
         print(f'Datos preprocesados guardados en {preprocessed_file_path}')
 
@@ -85,14 +87,17 @@ class idkROM:
         def __init__(self):
             self.model = None
 
+        @abstractmethod
         def train(self, X_train, y_train):
             """Método a sobrescribir en cada subclase"""
             raise NotImplementedError
 
+        @abstractmethod
         def evaluate(self, X_test, y_test):
             """Método a sobrescribir en cada subclase"""
             raise NotImplementedError
         
+        @abstractmethod
         def score(self, X_test, y_test):
             """Método a sobrescribir en cada subclase"""
             raise NotImplementedError

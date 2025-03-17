@@ -1,7 +1,8 @@
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, Matern
+from src.idkrom import idkROM
+from src.visualization.metrics import ModelReportGenerator
 import numpy as np
-from src.idkROM_v0 import idkROM
 import os
 import pandas as pd
 
@@ -24,7 +25,6 @@ class GaussianProcessROM(idkROM.Modelo):
 
         # Crear el GaussianProcessRegressor con el kernel y otros parámetros
         self.model = GaussianProcessRegressor(kernel=self.kernel_instance, alpha=noise, optimizer=optimizer)
-
 
     def train(self, X_train, y_train):
         """Entrena el modelo de Proceso Gaussiano y guarda el modelo y las predicciones."""
@@ -74,8 +74,24 @@ class GaussianProcessROM(idkROM.Modelo):
         return predictions
 
     def score(self, X_test, y_test):
-        """Calcula el error cuadrático medio entre las predicciones y los datos de prueba."""
+        """Calcula el error cuadrático medio entre las predicciones y los datos de prueba y genera el informe."""
         predictions = self.evaluate(X_test, y_test)
         mse = np.mean((predictions - y_test) ** 2)
         print(f"Mean Squared Error on Test Data: {mse}")
+
+        # Generar el informe con ModelReportGenerator
+        train_losses = []  # No hay pérdidas en GP, se deja vacío
+        val_losses = []
+        report_generator = ModelReportGenerator(
+            model=self,
+            train_losses=train_losses,
+            val_losses=val_losses,
+            X_train=None,
+            y_train=None,
+            X_test=X_test,
+            y_test=y_test,
+            model_name='gaussian_process'
+        )
+        report_generator.save_model_and_metrics()
+
         return mse

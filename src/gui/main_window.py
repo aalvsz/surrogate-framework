@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QComboBox, QDialog, QFormLayout, QSpinBox, QFileDialog, QDoubleSpinBox
-from src.idkROM_v0 import idkROM  # Importar la clase base idkROM
+from src.idkrom import idkROM  # Importar la clase base idkROM
 import pandas as pd
 from src.models.neural_network import NeuralNetworkROM
 from src.models.gaussian_process import GaussianProcessROM
@@ -79,6 +79,7 @@ class ROMApp(QWidget):
                 self.result_label.setText("Datos procesados correctamente.")
             except Exception as e:
                 self.result_label.setText(f"Error al cargar los datos: {str(e)}")
+                print(f"Error al cargar los datos: {str(e)}")
 
 
     def train_model(self):
@@ -101,7 +102,7 @@ class ROMApp(QWidget):
                 activation_function = dialog.activation_function_combobox.currentText()
                 learning_rate = dialog.learning_rate_spinbox.value()
                 num_epochs = dialog.num_epochs_spinbox.value()
-                optimizer_type = dialog.optimizer_combobox.currentText()
+                optimizer = dialog.optimizer_combobox.currentText()
 
                 model = NeuralNetworkROM(input_dim=X_train.shape[1],
                                         output_dim=y_train.shape[1],
@@ -109,13 +110,12 @@ class ROMApp(QWidget):
                                         neurons_per_layer=neurons_per_layer,
                                         activation_function=activation_function,
                                         learning_rate=learning_rate,
-                                        optimizer_type=optimizer_type,
+                                        optimizer=optimizer,
                                         num_epochs=num_epochs)
-                print(hidden_layers, neurons_per_layer, activation_function, learning_rate, optimizer_type, num_epochs)
             
             # Entrenar el modelo
             if model is not None:
-                model.train(X_train, y_train, num_epochs=num_epochs)
+                model.train(X_train, y_train)
         
         elif model_name == "RBF":
             model = idkROM.RBFROM()

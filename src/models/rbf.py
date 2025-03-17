@@ -1,5 +1,5 @@
 from scipy.interpolate import RBFInterpolator
-from src.idkROM_v0 import idkROM
+from src.idkrom import idkROM
 
 
 """RBF"""

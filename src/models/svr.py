@@ -1,5 +1,5 @@
 from sklearn.svm import SVR
-from src.idkROM_v0 import idkROM
+from src.idkrom import idkROM
 
 
 """SVR"""

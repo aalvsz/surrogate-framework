@@ -1,6 +1,6 @@
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
-from src.idkROM_v0 import idkROM
+from src.idkrom import idkROM
 
 
 """Response Surface"""
