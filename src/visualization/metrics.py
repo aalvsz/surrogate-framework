@@ -6,7 +6,7 @@ from jinja2 import Template
 from sklearn.metrics import mean_squared_error, r2_score
 
 class ModelReportGenerator:
-    def __init__(self, model, train_losses, val_losses, X_train, y_train, X_test, y_test, model_name="model"):
+    def __init__(self, model, train_losses, val_losses, X_train, y_train, X_test, y_test, model_name):
         self.model = model
         self.train_losses = train_losses
         self.val_losses = val_losses
@@ -16,10 +16,12 @@ class ModelReportGenerator:
         self.y_test = y_test
         self.model_name = model_name
 
-        # Detect model type and set hyperparameters accordingly
+            # Detect model type based on model_name
         self.hyperparameters = {}
-        if hasattr(model, 'hidden_layers'):  # Neural Network
+        if model_name.lower() == "neural_network":
             self.hyperparameters = {
+                'Input Dimension': model.input_dim,
+                'Output Dimension': model.output_dim,
                 'Hidden Layers': model.hidden_layers,
                 'Neurons per Layer': model.neurons_per_layer,
                 'Learning Rate': model.learning_rate,
@@ -27,14 +29,28 @@ class ModelReportGenerator:
                 'Optimizer': model.optimizer,
                 'Activation Function': model.activation_function
             }
-        elif hasattr(model, 'kernel'):  # Gaussian Process
+        elif model_name.lower() == "gaussian_process":
             self.hyperparameters = {
                 'Kernel': model.kernel,
                 'Noise': model.noise,
                 'Optimizer': model.optimizer
             }
+        elif model_name.lower() == "rbf":
+            self.hyperparameters = {
+                'gamma': model.gamma,
+            }
+        elif model_name.lower() == "response_surface":
+            self.hyperparameters = {
+                'degree': model.degree,
+            }
+        elif model_name.lower() == "svr":
+            self.hyperparameters = {
+                'kernel': model.kernel,
+                'C': model.C,
+                'epsilon': model.epsilon
+            }
         else:
-            raise ValueError("Model type not recognized")
+            raise ValueError(f"Model type '{model_name}' not recognized")
 
         # Output directory
         self.output_dir = os.path.join(os.getcwd(), 'results', model_name)
@@ -56,6 +72,7 @@ class ModelReportGenerator:
             yaxis_title="Loss",
             template="plotly_dark"
         )
+        fig.show()
         fig.write_html(os.path.join(self.output_dir, 'convergence_plot.html'))
 
     def create_metrics_graph(self, metrics_df):
@@ -69,6 +86,7 @@ class ModelReportGenerator:
             yaxis_title="Value",
             template="plotly_dark"
         )
+        fig.show()
         fig.write_html(os.path.join(self.output_dir, 'metrics_plot.html'))
 
     def generate_html_report(self, metrics_df):

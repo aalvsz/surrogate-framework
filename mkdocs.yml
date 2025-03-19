@@ -1,65 +1,27 @@
-site_name: idkROM docs
-repo_url: https://kodea.danobatgroup.com/dip/precision/ideko/machine-learning/PINNs
-site_url: http://docs.dip.ideko.es/
-edit_uri: edit/main/docs
+site_name: idkROM Documentation
+nav:
+  - Home: index.md
+  - Classes: classes.md
+  - Functions: functions.md
+  - Descriptions: descriptions.md
 theme:
   name: material
-  features:
-    - content.code.copy
-    - content.action.edit
-plugins:
-    - search
-    - glightbox
-    - git-revision-date-localized
-    - mkdocs-jupyter
-    - mkdocstrings:
-        handlers:
-          python:
-            paths: [src]  # search packages in the code/src folder
-    
 markdown_extensions:
-  - codehilite:
-      linenums: true
-  - admonition
-  - footnotes
-  - meta
   - toc:
       permalink: true
-  - pymdownx.arithmatex
-  - pymdownx.betterem:
-      smart_enable: all
-  - pymdownx.caret
-  - pymdownx.critic
-  - pymdownx.details
-  - pymdownx.emoji:
-      emoji_generator: !!python/name:pymdownx.emoji.to_svg
-  - pymdownx.inlinehilite
-  - pymdownx.magiclink
-  - pymdownx.mark
-  - pymdownx.smartsymbols
+  - admonition
+  - codehilite
+  - footnotes
+  - tables
+  - def_list
+  - attr_list
+  - md_in_html
+  - smarty
   - pymdownx.superfences
-  - pymdownx.tasklist:
-      custom_checkbox: true
-  - pymdownx.tilde
-  - pymdownx.superfences:
-      custom_fences:
-        - name: mermaid
-          class: mermaid
-          format: !!python/name:pymdownx.superfences.fence_code_format
-extra_javascript:
-- 'js/extra.js'
-- 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-MML-AM_CHTML'
-
-nav:
-    - Home: index.md
-    - Ejemplos:
-        - Heat steady 2D: examples/heat_problem/heat_steady_2d_param.py
-    - API:
-        - PINNs.data: API/PINNs.data.md
-        - PINNs.fem: API/PINNs.fem.md
-        - PINNs.grad: API/PINNs.grad.md
-        - PINNs.normals: API/PINNs.normals.md
-        - PINNs.pinn: API/PINNs.pinn.md
-        - PINNs.test: API/PINNs.test.md
-        - PINNs.train: API/PINNs.train.md
-        - PINNs.utils: API/PINNs.utils.md
+  - pymdownx.details
+  - pymdownx.inlinehilite
+  - pymdownx.emoji
+  - pymdownx.tasklist
+  - pymdownx.highlight
+  - pymdownx.betterem
+  - pymdownx.critic

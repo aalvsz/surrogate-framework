@@ -1,0 +1,125 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Neural Network raw",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "D:\\idkROM\\idkROM\\data\\main_HydrTable_DOE_Results_0601_1200 (2).csv",
+                "raw",
+                "neural_network"
+            ]
+        },
+        {
+            "name": "Python Debugger: Neural Network pre",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "D:\\idkROM\\idkROM\\data\\main_HydrTable_DOE_Results_0601_1200 (2).csv",
+                "preproc",
+                "neural_network"
+            ]
+        },
+        {
+            "name": "Python Debugger: Gaussian Process raw",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "D:\\idkROM\\idkROM\\data\\main_HydrTable_DOE_Results_0601_1200 (2).csv",
+                "raw",
+                "gaussian_process"
+            ]
+        },
+        {
+            "name": "Python Debugger: Gaussian Process pre",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "D:\\idkROM\\idkROM\\data\\main_HydrTable_DOE_Results_0601_1200 (2).csv",
+                "preproc",
+                "gaussian_process"
+            ]
+        },
+        {
+            "name": "Python Debugger: RBF raw",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "D:\\idkROM\\idkROM\\data\\main_HydrTable_DOE_Results_0601_1200 (2).csv",
+                "raw",
+                "rbf"
+            ]
+        },
+        {
+            "name": "Python Debugger: RBF pre",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "D:\\idkROM\\idkROM\\data\\main_HydrTable_DOE_Results_0601_1200 (2).csv",
+                "preproc",
+                "rbf"
+            ]
+        },
+        {
+            "name": "Python Debugger: RespSurface raw",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "D:\\idkROM\\idkROM\\data\\main_HydrTable_DOE_Results_0601_1200 (2).csv",
+                "raw",
+                "response_surface"
+            ]
+        },
+        {
+            "name": "Python Debugger: RespSurface pre",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "D:\\idkROM\\idkROM\\data\\main_HydrTable_DOE_Results_0601_1200 (2).csv",
+                "preproc",
+                "response_surface"
+            ]
+        },
+        {
+            "name": "Python Debugger: SVR raw",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "D:\\idkROM\\idkROM\\data\\main_HydrTable_DOE_Results_0601_1200 (2).csv",
+                "raw",
+                "svr"
+            ]
+        },
+        {
+            "name": "Python Debugger: SVR pre",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "D:\\idkROM\\idkROM\\data\\main_HydrTable_DOE_Results_0601_1200 (2).csv",
+                "preproc",
+                "svr"
+            ]
+        }
+    ]
+}

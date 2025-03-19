@@ -1,11 +1,13 @@
+import pandas as pd
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QComboBox, QDialog, QFormLayout, QSpinBox, QFileDialog, QDoubleSpinBox
 from src.idkrom import idkROM  # Importar la clase base idkROM
-import pandas as pd
+from src.pre import Pre
 from src.models.neural_network import NeuralNetworkROM
 from src.models.gaussian_process import GaussianProcessROM
 
 
 class ROMApp(QWidget):
+    
     def __init__(self):
         super().__init__()
         self.setWindowTitle("ROM Tool")
@@ -64,7 +66,7 @@ class ROMApp(QWidget):
                     # Preprocesar: se ejecuta el método preprocessing que normaliza, elimina outliers, etc.
                     df = pd.read_csv(file_path, delimiter=",", decimal=".")
                     rom = idkROM()
-                    self.inputs, self.outputs = rom.preprocessing(df)
+                    self.inputs, self.outputs = Pre.preprocessing(df)
 
                 else:  # Datos preprocesados
                     # Se asume que el CSV ya contiene los datos normalizados, con las primeras 7 columnas como inputs

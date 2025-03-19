@@ -5,93 +5,205 @@ from src.visualization.metrics import ModelReportGenerator
 import numpy as np
 import os
 import pandas as pd
+import joblib
 
 class GaussianProcessROM(idkROM.Modelo):
-    def __init__(self, kernel="RBF", noise=1e-2, optimizer=None):
+    """
+    A class for creating and training a Gaussian Process model.
+    """
+
+    def __init__(self, kernel: str = "RBF", noise: float = 1e-2, optimizer: str = None):
+        """
+        Initializes the Gaussian Process model with the given parameters.
+
+        Args:
+            kernel (str): The kernel to use in the Gaussian Process ("RBF" or "Matern").
+            noise (float): The noise level in the Gaussian Process.
+            optimizer (str, optional): The optimizer to use for hyperparameter tuning. Defaults to None.
+        """
         super().__init__()
 
-        # Inicialización de parámetros
+        # Initialize parameters
         self.kernel = kernel
         self.noise = noise
         self.optimizer = optimizer
 
-        # Configura el kernel basado en la selección
+        # Configure the kernel based on the selection
         if kernel == "RBF":
-            self.kernel_instance = RBF(length_scale=1.0)  # Kernel RBF con escala de longitud predeterminada
+            self.kernel_instance = RBF(length_scale=1.0)  # RBF kernel with default length scale
         elif kernel == "Matern":
-            self.kernel_instance = Matern(length_scale=1.0, nu=1.5)  # Kernel Matern con escala de longitud predeterminada
+            self.kernel_instance = Matern(length_scale=1.0, nu=1.5)  # Matern kernel with default length scale
         else:
-            raise ValueError(f"Kernel {kernel} no soportado")
+            raise ValueError(f"Kernel {kernel} not supported")
 
-        # Crear el GaussianProcessRegressor con el kernel y otros parámetros
+        # Create the GaussianProcessRegressor with the kernel and other parameters
         self.model = GaussianProcessRegressor(kernel=self.kernel_instance, alpha=noise, optimizer=optimizer)
 
-    def train(self, X_train, y_train):
-        """Entrena el modelo de Proceso Gaussiano y guarda el modelo y las predicciones."""
-        # Ajustar el modelo a los datos de entrenamiento
+        # Variables for reporting (will be filled during training)
+        self.X_train = None
+        self.y_train = None
+        self.X_val = None
+        self.y_val = None
+
+        self.model_name = 'gaussian_process'
+
+
+    def get_params(self, deep=True):
+        """
+        Get parameters for this estimator.
+
+        Args:
+            deep (bool): If True, will return the parameters for this estimator and contained subobjects that are estimators.
+
+        Returns:
+            dict: Parameter names mapped to their values.
+        """
+        return {
+            'kernel': self.kernel,
+            'noise': self.noise,
+            'optimizer': self.optimizer
+        }
+
+    def set_params(self, **params):
+        """
+        Set the parameters of this estimator.
+
+        Args:
+            **params: Estimator parameters.
+
+        Returns:
+            self: Estimator instance.
+        """
+        for key, value in params.items():
+            setattr(self, key, value)
+        if self.kernel == "RBF":
+            self.kernel_instance = RBF(length_scale=1.0)
+        elif self.kernel == "Matern":
+            self.kernel_instance = Matern(length_scale=1.0, nu=1.5)
+        self.model = GaussianProcessRegressor(kernel=self.kernel_instance, alpha=self.noise, optimizer=self.optimizer)
+        return self
+
+
+    def fit(self, X_train, y_train):
+        """
+        Fits the gaussian process model to the training data.
+        
+        Args:
+            X_train (pd.DataFrame): Training input data.
+            y_train (pd.DataFrame): Training target data.
+        """
+        self.train(X_train, y_train, X_train, y_train)
+
+
+    def train(self, X_train: pd.DataFrame, y_train: pd.DataFrame, X_val: pd.DataFrame, y_val: pd.DataFrame):
+        """
+        Trains the Gaussian Process model and saves the model and predictions.
+
+        Args:
+            X_train (pd.DataFrame): Training input data.
+            y_train (pd.DataFrame): Training output data.
+            X_val (pd.DataFrame): Validation input data.
+            y_val (pd.DataFrame): Validation output data.
+        """
+        # Store data for reporting
+        self.X_train = X_train
+        self.y_train = y_train
+        self.X_val = X_val
+        self.y_val = y_val
+
+        # Fit the model to the training data
         self.model.fit(X_train, y_train)
 
-        # Guardar el modelo
-        idkROM.output_folder = os.path.join(os.getcwd(), 'results', f'{str(X_train.shape[0])}_samples')
-        os.makedirs(idkROM.output_folder, exist_ok=True)
-        model_path = os.path.join(idkROM.output_folder, 'gp_model.pkl')
+        # Save the model
+        output_folder = os.path.join(os.getcwd(), 'results', self.model_name)
+        os.makedirs(output_folder, exist_ok=True)
+        model_path = os.path.join(output_folder, 'gp_model.pkl')
         with open(model_path, 'wb') as f:
-            import joblib
             joblib.dump(self.model, f)
 
-        print(f"Modelo guardado en {model_path}")
+        print(f"Model saved at: {model_path}")
 
-    def save_predictions(self, X_train, y_train, predictions, model_name='gaussian_process'):
-        """Guarda las predicciones y los datos de entrenamiento en un archivo CSV."""
-        results = pd.DataFrame(X_train, columns=[f'Input_{i}' for i in range(X_train.shape[1])])
+    def save_predictions(self, X_test: pd.DataFrame, y_test: pd.DataFrame, predictions: pd.DataFrame):
+        """
+        Saves the predictions and test data to a CSV file.
+
+        Args:
+            X_test (pd.DataFrame): Test input data.
+            y_test (pd.DataFrame): Test output data.
+            predictions (pd.DataFrame): Model predictions.
+        """
+        results = pd.DataFrame(X_test, columns=[f'Input_{i}' for i in range(X_test.shape[1])])
         
-        y_train = np.array(y_train)
+        y_test = np.array(y_test)
         predictions = np.array(predictions)
         
-        if y_train.ndim > 1 and y_train.shape[1] > 1:
-            # Guardar cada columna de salida por separado
-            for col in range(y_train.shape[1]):
-                results[f'True_Output_{col}'] = y_train[:, col]
+        if y_test.ndim > 1 and y_test.shape[1] > 1:
+            # Save each output column separately
+            for col in range(y_test.shape[1]):
+                results[f'True_Output_{col}'] = y_test[:, col]
                 results[f'Predicted_Output_{col}'] = predictions[:, col]
         else:
-            results['True_Output'] = y_train.squeeze()
+            results['True_Output'] = y_test.squeeze()
             results['Predicted_Output'] = predictions.squeeze()
 
-        # Guardar las predicciones
-        output_path = os.path.join(idkROM.output_folder, f'{model_name}_predictions.csv')
+        # Save the predictions
+        output_path = os.path.join(os.getcwd(), 'results', self.model_name, f'{self.model_name}_predictions.csv')
         results.to_csv(output_path, index=False)
-        print(f"Predicciones guardadas en {output_path}")
+        print(f"Predictions saved at: {output_path}")
 
-    def predict(self, X):
-        """Hace predicciones con el modelo entrenado."""
-        predictions = self.model.predict(X)
-        return predictions
+    def predict(self, X_test: pd.DataFrame) -> np.ndarray:
+        """
+        Makes predictions with the trained model.
 
-    def evaluate(self, X_test, y_test):
-        """Evalúa el modelo con los datos de prueba y guarda las predicciones."""
-        predictions = self.predict(X_test)
-        self.save_predictions(X_test, y_test, predictions)
-        return predictions
+        Args:
+            X_test (pd.DataFrame): Test input data.
 
-    def score(self, X_test, y_test):
-        """Calcula el error cuadrático medio entre las predicciones y los datos de prueba y genera el informe."""
-        predictions = self.evaluate(X_test, y_test)
-        mse = np.mean((predictions - y_test) ** 2)
-        print(f"Mean Squared Error on Test Data: {mse}")
+        Returns:
+            np.ndarray: Model predictions.
+        """
+        y_pred = self.model.predict(X_test)
+        return y_pred
 
-        # Generar el informe con ModelReportGenerator
-        train_losses = []  # No hay pérdidas en GP, se deja vacío
-        val_losses = []
+    def evaluate(self, X_test: pd.DataFrame, y_test: pd.DataFrame, y_pred: np.ndarray, output_scaler=None) -> float:
+        """
+        Evalúa el modelo con los datos de test y guarda las predicciones.
+        Si se proporciona 'output_scaler', también se calcula el MSE en la escala original.
+        
+        Args:
+            X_test (pd.DataFrame): Datos de entrada del conjunto de test.
+            y_test (pd.DataFrame): Datos verdaderos de salida del conjunto de test.
+            y_pred (np.ndarray): Predicciones del modelo.
+            output_scaler (opcional): Scaler usado para transformar los outputs durante el preprocesamiento.
+            
+        Returns:
+            float: El MSE en la escala normalizada.
+        """
+        # Guardar las predicciones (esto queda igual)
+        self.save_predictions(X_test, y_test, y_pred)
+
+        # Calcular el MSE en la escala en la que están (normalizada)
+        mse_scaled = np.mean((y_pred - y_test) ** 2)
+        print(f"MSE en escala normalizada: {mse_scaled}")
+
+        # Si se proporciona el scaler, se calcula también el MSE en la escala original.
+        if output_scaler is not None:
+            # Asegurarse de que las dimensiones sean compatibles para inverse_transform:
+            y_pred_original = output_scaler.inverse_transform(y_pred.reshape(-1, y_test.shape[1]))
+            y_test_original = output_scaler.inverse_transform(y_test.to_numpy())
+            mse_original = np.mean((y_pred_original - y_test_original) ** 2)
+            print(f"MSE en escala original: {mse_original}")
+
+        # Generar reporte de métricas (similar a la red neuronal)
         report_generator = ModelReportGenerator(
             model=self,
-            train_losses=train_losses,
-            val_losses=val_losses,
-            X_train=None,
-            y_train=None,
+            train_losses=[],  # Para Gaussian Process no tenemos un histórico de pérdidas
+            val_losses=[],
+            X_train=self.X_train,
+            y_train=self.y_train,
             X_test=X_test,
             y_test=y_test,
-            model_name='gaussian_process'
+            model_name=self.model_name
         )
         report_generator.save_model_and_metrics()
 
-        return mse
+        return mse_scaled
