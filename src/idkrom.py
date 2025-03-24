@@ -11,8 +11,13 @@ class idkROM(ABC):
     """Clase base abstracta
     Sirve de plantilla para las subclases de cada método ROM, donde se implementan las funciones train y evaluate dedicadas."""
     class Modelo(ABC):
-        def __init__(self):
-            self.model = None
+        def __init__(self, rom_config, random_state):
+            self.rom_config = rom_config
+            self.random_state = random_state
+        
+        """@abstractmethod
+        def search_best_hyperparams(self, X_train, y_train, X_val, y_val, iterations, cv_folds):
+            raise NotImplementedError"""
 
         @abstractmethod
         def train(self, X_train, y_train, X_val, y_val):

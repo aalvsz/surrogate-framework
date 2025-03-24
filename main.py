@@ -1,8 +1,4 @@
-import sys
 import os
-import joblib
-from PyQt6.QtWidgets import QApplication
-#from src.gui.main_window import ROMApp  # Asegúrate de que este archivo es el correcto
 from src.loader.import_data import DataLoader
 from src.pre.preprocessing import Pre
 from src.models.neural_network import NeuralNetworkROM
@@ -10,43 +6,36 @@ from src.models.gaussian_process import GaussianProcessROM
 from src.models.rbf import RBFROM
 from src.models.polynomial_response_surface import PolynomialResponseSurface
 from src.models.svr import SVRROM
-from src.tools.search_hyperparams import search_best_hyperparameters
-
-"""if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = ROMApp()
-    window.show()
-    sys.exit(app.exec())"""
 
 
 if __name__ == "__main__":
 
-    import sys
-    if len(sys.argv) < 4:
-        print("Uso: python idkROM.py <ruta_csv> <tipo_datos: raw/processed> <modelo: neural_network/gaussian_process>")
-        sys.exit(1)
+    random_state = 42
 
-    file_path = sys.argv[1]
-    data_source = sys.argv[2] #raw or processed 
-    model_name = sys.argv[3] #neural_network or gaussian_process
-
-    # indice de la columna del ultimo input
-    last_input_var = 7
+    loader = DataLoader()
+    config_dict = loader.read_yml(os.getcwd() + "/config.yml")
+    print(f"Diccionario de configuracion: {config_dict}")
+    inputs_file_path = config_dict['data inputs']
+    outputs_file_path = config_dict['data outputs']
+    data_source = config_dict['read mode']
+    model_name = config_dict['model type']
+    hyperparams = config_dict['hyperparams']
+    mode = config_dict['mode']
+    default_params = loader.default_params
 
     if data_source == "raw":
-        # Cargamos los datos y extraemos df con inputs y outputs
-        loader = DataLoader()
-        df = loader.load_data(file_path, data_source)
+        ##### CARGAR LOS DATOS
+        inputs_df, outputs_df = loader.load_data(input_path=inputs_file_path, output_path=outputs_file_path, data_source="raw")
         print(f"Datos cargados.")
 
-        # Normalizamos los inputs y outputs
-        pre_processor = Pre()
-        X_train, y_train, X_val, y_val, X_test, y_test = pre_processor.split_dataset(df, last_input_var)
+        ##### PREPROCESAMIENTO
+        preprocessor = Pre()
+        scaler_type = 'minmax'
+        filter_method = 'isolation_forest'
         (X_train_normalized, y_train_normalized,
-        X_val_normalized, y_val_normalized,
-        X_test_normalized, y_test_normalized) = pre_processor.filter_and_scale(X_train, y_train, X_val, y_val,
-                                                                             X_test, y_test, scaler_type='minmax')
-        print(f"Datos normalizados con dos scalers (inputs y outputs).")
+                X_val_normalized, y_val_normalized,
+                X_test_normalized, y_test_normalized) = preprocessor.pre_process_data(inputs_df, outputs_df, 0.7, 0.15, 0.15, scaler_type, filter_method, random_state)
+        print(f"Datos preprocesados.")
 
 
     else: 
@@ -54,52 +43,45 @@ if __name__ == "__main__":
         loader = DataLoader()
         (X_train_normalized, y_train_normalized,
         X_val_normalized, y_val_normalized,
-        X_test_normalized, y_test_normalized) = loader.load_data(file_path, data_source)
+        X_test_normalized, y_test_normalized) = loader.load_data(output_path=outputs_file_path, data_source="pre")
         print(f"Datos preprocesados cargados.")
 
+    rom_config = {
+    'input_dim': X_train_normalized.shape[1],
+    'output_dim': y_train_normalized.shape[1],
+    'hyperparams': hyperparams if mode in ['best', 'manual'] else default_params[model_name],
+    'mode': mode,
+    'model_name': model_name
+    }
 
-    X_train = X_train_normalized
-    y_train = y_train_normalized
-    X_val = X_val_normalized
-    y_val = y_val_normalized
-    X_test = X_test_normalized
-    y_test = y_test_normalized
-
-    #print("ATENCION")
-    #print(X_train.shape[1], y_train.shape[1], X_val.shape[1], y_val.shape[1], X_test.shape[1], y_test.shape[1])
-
-    # Buscar los mejores hiperparámetros para el modelo
-    best_params = search_best_hyperparameters(model_name, X_train, y_train, search_type='random', n_iter=10)
-
-    # Configuración de ejemplo para el modelo
+    print(f"\nConfiguracion del ROM: {rom_config}")
+    
+    ##### SE CONFIGURA EL MODELO
     if model_name.lower() == "neural_network":
-        model = NeuralNetworkROM(**best_params)
+        # creamos un modelo de ROM solo con atributos, o sea sin crear una red neuronal
+        model = NeuralNetworkROM(rom_config, random_state=random_state)
+        #best_params = model.search_best_hyperparams(X_train_normalized, y_train_normalized, X_val_normalized, y_val_normalized, iterations=10, cv_folds=5, random_state=random_state)
+        #rom_config['hyperparams'] = best_params	
 
     elif model_name.lower() == "gaussian_process":
-        model = GaussianProcessROM(**best_params)
+        model = GaussianProcessROM(rom_config, random_state=random_state)
     
     elif model_name.lower() == "rbf":
-        model = RBFROM(**best_params)
+        model = RBFROM(rom_config, random_state=random_state)
 
     elif model_name.lower() == "response_surface":
-        model = PolynomialResponseSurface(**best_params)
+        model = PolynomialResponseSurface(rom_config, random_state=random_state)
 
     elif model_name.lower() == "svr":
-        model = SVRROM(**best_params)
+        model = SVRROM(rom_config, random_state=random_state)
     
-    # Entrenar el modelo con el subconjunto de entrenamiento y validar sobre el subconjunto de validación
-    model.train(X_train, y_train, X_val, y_val)
+    ##### ENTRENAMIENTO
+    model.train(X_train_normalized, y_train_normalized, X_val_normalized, y_val_normalized)
 
-    # Realizar predicciones sobre el subconjunto de test
-    y_pred = model.predict(X_test)
+    ##### PREDICCIONES
+    y_pred = model.predict(X_test_normalized)
 
-    # Cargamos el scaler de salida guardado en el preprocesamiento
-    output_scaler = joblib.load(os.path.join(loader.results_path, 'output_scaler.pkl'))
-    if data_source == 'raw' and pre_processor.scaler_type == 'minmax':
-        print("Mínimos originales de los outputs:", output_scaler.data_min_)
-        print("Máximos originales de los outputs:", output_scaler.data_max_)
-
-    # Evaluar el modelo utilizando las predicciones
-    model.evaluate(X_test, y_test, y_pred, output_scaler=output_scaler)
+    ##### EVALUACION
+    model.evaluate(X_test_normalized, y_test_normalized, y_pred)
     
         

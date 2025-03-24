@@ -12,9 +12,10 @@ class DataLoader:
     """
     def __init__(self):
         self.results_path = None
+        self.default_params = None
         pass
 
-    def read_yml(self, config_path):
+    def read_yml(self, config_path: str):
         """
         Lee el archivo YAML de configuración y devuelve las variables asociadas.
         """
@@ -27,7 +28,7 @@ class DataLoader:
 
         # Preprocesamiento
         preprocess = config['preprocess']
-        raw = preprocess.get('raw', True)
+        read_mode = preprocess.get('read mode', 'raw')
         scaler = preprocess.get('scaler', 'StandardScaler')
         validation = preprocess.get('validation', 'single')
         test_size = preprocess.get('test_size', 0.15)
@@ -35,19 +36,20 @@ class DataLoader:
         # Modelo
         model_config = config['model']
         model_type = model_config['type']
-        hyper_params_config = model_config['hyper_params']
+        hyper_params_config = model_config['hyperparams']
         mode = hyper_params_config['mode']
 
         # Definir hiperparámetros por defecto
-        default_params = {
-            'NN': {
+        self.default_params = {
+            'neural_network': {
                 'n_layers': 2,
-                'n_neurons': 10,
-                'activation': 'relu',
-                'optimizer': 'adam',
-                'loss': 'mse',
-                'metrics': 'mae',
-                'epochs': 100
+                'n_neurons': 5,
+                'activation': 'Tanh',
+                'optimizer': 'Adam',
+                'learning_rate': 0.001,
+                #'loss': 'mse',
+                #'metrics': 'mae',
+                'epochs': 10000
             },
             'gaussian_process': {
                 'kernel': 'RBF',
@@ -66,13 +68,31 @@ class DataLoader:
             }
         }
 
+        # Función para convertir una cadena con opciones separadas por '|' en una lista
+        def parse_options(value):
+            if isinstance(value, str):
+                if '|' in value:
+                    options = value.split('|')
+                    # Intentar convertir los valores en enteros o flotantes si es posible
+                    return [float(option.strip()) if '.' in option else int(option.strip()) if option.strip().isdigit() else option.strip() for option in options]
+                elif value.replace('.', '', 1).isdigit():  # Si es un número (entero o flotante)
+                    return float(value) if '.' in value else int(value)
+            return value
+
         # Crear diccionario de hiperparámetros
         if mode == 'manual':
             hyper_params = hyper_params_config['params']
         elif mode == 'best':
-            hyper_params = {k: v for k, v in hyper_params_config['params'].items() if isinstance(v, list)}
+            hyper_params = hyper_params_config['params']
+            # Include n_iter and cv only if mode is 'best'
+            hyper_params['n_iter'] = hyper_params_config['params'].get('n_iter', 10)
+            hyper_params['cv'] = hyper_params_config['params'].get('cv', 5)
         else:  # Default
-            hyper_params = default_params.get(model_type.lower(), {})
+            hyper_params = self.default_params.get(model_type.lower(), {})
+
+        # Convertir las cadenas de listas en listas reales o números individuales
+        for key, value in hyper_params.items():
+            hyper_params[key] = parse_options(value)
 
         # Evaluación
         evaluate = config['evaluate']
@@ -81,35 +101,38 @@ class DataLoader:
         save = evaluate.get('save', False)
 
         return {
-            'data_input': data_input,
-            'data_output': data_output,
-            'raw': raw,
+            'data inputs': data_input,
+            'data outputs': data_output,
+            'read mode': read_mode,
             'scaler': scaler,
             'validation': validation,
-            'test_size': test_size,
-            'model_type': model_type,
+            'test size': test_size,
+            'model type': model_type,
             'mode': mode,
-            'hyper_params': hyper_params,
-            'eval_metrics': eval_metrics,
+            'hyperparams': hyper_params,
+            'eval metrics': eval_metrics,
             'plot': plot,
             'save': save
         }
 
-
-
-    def load_data(self, file_path, data_source="raw"):
-
-        # nos quedamos con el directorio (sin el nombre del archivo)
-        self.results_path = os.path.dirname(os.path.dirname(file_path))
-        self.results_path = os.path.join(self.results_path, "results")
+    def load_data(self, input_path=None, output_path=None, data_source="raw"):
+        
 
         if data_source.lower() == "raw":
-            # Leer datos con delimitador y decimal apropiado
-            df = pd.read_csv(file_path, delimiter=",", decimal=".")
-
-            return df
+            # Nos quedamos con el directorio (sin el nombre del archivo)
+            self.results_path = os.path.dirname(os.path.dirname(input_path))
+            self.results_path = os.path.join(self.results_path, "results")
+            
+            # Leer datos usando coma como separador decimal
+            df_inputs = pd.read_csv(input_path, delimiter=",", decimal=".") 
+            df_outputs = pd.read_csv(output_path, delimiter=",", decimal=".")
+            
+            return df_inputs, df_outputs
 
         else:
+            self.results_path = os.path.dirname(os.path.dirname(output_path))
+            self.results_path = os.path.join(self.results_path, "results")
+
             # Asumimos que los CSV ya contienen los datos preprocesados
             X_train = pd.read_csv(os.path.join(self.results_path, 'X_train.csv'), sep=",")
             y_train = pd.read_csv(os.path.join(self.results_path, 'y_train.csv'), sep=",")
@@ -117,13 +140,16 @@ class DataLoader:
             y_val   = pd.read_csv(os.path.join(self.results_path, 'y_val.csv'), sep=",")
             X_test  = pd.read_csv(os.path.join(self.results_path, 'X_test.csv'), sep=",")
             y_test  = pd.read_csv(os.path.join(self.results_path, 'y_test.csv'), sep=",")
-
+            
             return X_train, y_train, X_val, y_val, X_test, y_test
 
         
 if __name__ == "__main__":
+
+    # TESTEAR LA LECTURA DEL YAML ################################################################################################################
+
     # Ruta al archivo YAML de prueba
-    config_path = "main.yml"  # Actualiza esta ruta con la ubicación de tu archivo YAML de prueba
+    config_path = "config.yml"  # Actualiza esta ruta con la ubicación de tu archivo YAML de prueba
 
     # Inicializar DataLoader y leer el archivo YAML
     data_loader = DataLoader()
@@ -131,4 +157,6 @@ if __name__ == "__main__":
 
     # Imprimir el diccionario resultante
     print(config_dict)
-    print(f"Diccionario de hiperparametros: {config_dict['hyper_params']}")
+    print(f"\nDiccionario de hiperparámetros: {config_dict['hyperparams']}")
+    print(f"Parametros por defecto: {data_loader.default_params}")
+    print(f"Parametros por defecto Neural Network: {data_loader.default_params['neural_network']}")

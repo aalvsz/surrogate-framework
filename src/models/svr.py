@@ -4,6 +4,7 @@ import os
 import joblib
 import pandas as pd
 import numpy as np
+from sklearn.metrics import mean_squared_error, mean_absolute_error
 from src.visualization.metrics import ModelReportGenerator
 
 class SVRROM(idkROM.Modelo):
@@ -11,19 +12,22 @@ class SVRROM(idkROM.Modelo):
     A class for creating and training a Support Vector Regression (SVR) model.
     """
 
-    def __init__(self, kernel='rbf', C=1.0, epsilon=0.1):
+    def __init__(self, rom_config, random_state):
         """
         Initializes the SVR model with the given parameters.
 
         Args:
-            kernel (str): The kernel type to be used in the algorithm.
-            C (float): Regularization parameter.
-            epsilon (float): Epsilon in the epsilon-SVR model.
+            rom_config (dict): Configuration dictionary for the ROM.
+            random_state (int): Seed for random number generation.
         """
-        super().__init__()
-        self.kernel = kernel
-        self.C = C
-        self.epsilon = epsilon
+        super().__init__(rom_config, random_state)
+
+        # Extraer parámetros de configuración
+        self.kernel = rom_config['hyperparams'].get('kernel', 'rbf')
+        self.C = rom_config['hyperparams'].get('C', 1.0)
+        self.epsilon = rom_config['hyperparams'].get('epsilon', 0.1)
+        self.random_state = random_state
+        self.model_name = rom_config['model_name']
         self.model = SVR(kernel=self.kernel, C=self.C, epsilon=self.epsilon)
 
         # Variables for reporting (will be filled during training)
@@ -31,160 +35,141 @@ class SVRROM(idkROM.Modelo):
         self.y_train = None
         self.X_val = None
         self.y_val = None
+        self.train_losses = []
+        self.val_losses = []
+        self.rom_config = rom_config
 
-        self.model_name = 'svr'
-
-    def get_params(self, deep=True):
+    def calculate_bic(self, y_true, y_pred):
         """
-        Get parameters for this estimator.
+        Calculates the Bayesian Information Criterion (BIC) for the SVR model.
 
         Args:
-            deep (bool): If True, will return the parameters for this estimator and contained subobjects that are estimators.
+            y_true (np.ndarray or pd.DataFrame): True labels for the test data.
+            y_pred (np.ndarray): Predictions made by the model on the test data.
 
         Returns:
-            dict: Parameter names mapped to their values.
+            float: The BIC value.
         """
-        return {
-            'kernel': self.kernel,
-            'C': self.C,
-            'epsilon': self.epsilon
-        }
+        n = len(y_true)
+        if n == 0:
+            return np.inf  # Return infinity if no test data
 
-    def set_params(self, **params):
-        """
-        Set the parameters of this estimator.
+        # Convert y_true to a NumPy array if it's a DataFrame
+        if isinstance(y_true, pd.DataFrame):
+            y_true_np = y_true.values
+        else:
+            y_true_np = y_true
 
-        Args:
-            **params: Estimator parameters.
+        # Ensure y_true_np has the same shape as y_pred for element-wise comparison
+        if y_true_np.shape != y_pred.shape:
+            raise ValueError(f"Shape mismatch: y_true shape is {y_true_np.shape}, y_pred shape is {y_pred.shape}. They should be the same for BIC calculation.")
 
-        Returns:
-            self: Estimator instance.
-        """
-        for key, value in params.items():
-            setattr(self, key, value)
-        self.model = SVR(kernel=self.kernel, C=self.C, epsilon=self.epsilon)
-        return self
-
-    def fit(self, X_train, y_train):
-        """
-        Fits the SVR model to the training data.
-        
-        Args:
-            X_train (pd.DataFrame): Training input data.
-            y_train (pd.DataFrame): Training target data.
-        """
-        self.train(X_train, y_train, X_train, y_train)
+        mse = np.mean((y_pred - y_true_np) ** 2)
+        sse = mse * n
+        # Approximate number of parameters by the number of support vectors (sum over all models)
+        num_params = sum(model.support_.shape[0] for model in self.models) if hasattr(self, 'models') else 0
+        bic = n * np.log(sse) + num_params * np.log(n)
+        return bic
 
     def train(self, X_train: pd.DataFrame, y_train: pd.DataFrame, X_val: pd.DataFrame, y_val: pd.DataFrame):
-        """
-        Trains the SVR model and saves the model and predictions.
-
-        Args:
-            X_train (pd.DataFrame): Training input data.
-            y_train (pd.DataFrame): Training output data.
-            X_val (pd.DataFrame): Validation input data.
-            y_val (pd.DataFrame): Validation output data.
-        """
         self.X_train = X_train
         self.y_train = y_train
         self.X_val = X_val
         self.y_val = y_val
 
-        # Reshape y_train if necessary
-        if y_train.ndim == 2 and y_train.shape[1] == 1:
-            y_train = y_train.ravel()
+        self.models = [] # Lista para almacenar los modelos SVR individuales
+        self.train_losses = []
+        self.val_losses = []
 
-        # Fit the model to the training data
-        self.model.fit(X_train, y_train)
+        for i in range(y_train.shape[1]):
+            print(f"Entrenando modelo para la salida {i+1}")
+            y_train_column = y_train.iloc[:, i].values.ravel()  # Seleccionar una columna y convertirla a 1D
+            model = SVR(kernel=self.kernel, C=self.C, epsilon=self.epsilon)
+            model.fit(X_train, y_train_column)
+            self.models.append(model)
 
-        # Save the model
+            # Calcular la pérdida de entrenamiento para esta salida
+            y_train_pred = self.predict_single_output(X_train, i)
+            mse_train = mean_squared_error(y_train.iloc[:, i], y_train_pred)
+            self.train_losses.append(mse_train)
+            print(f"Training MSE (salida {i+1}): {mse_train}")
+
+            # Calcular la pérdida de validación para esta salida
+            y_val_pred = self.predict_single_output(X_val, i)
+            mse_val = mean_squared_error(y_val.iloc[:, i], y_val_pred)
+            self.val_losses.append(mse_val)
+            print(f"Validation MSE (salida {i+1}): {mse_val}")
+
+        # Guardar todos los modelos
         output_folder = os.path.join(os.getcwd(), 'results', self.model_name)
         os.makedirs(output_folder, exist_ok=True)
         model_path = os.path.join(output_folder, 'svr_model.pkl')
         with open(model_path, 'wb') as f:
-            joblib.dump(self.model, f)
+            joblib.dump(self.models, f)  # Guardar la lista de modelos
 
-        print(f"Model saved at: {model_path}")
-
-    def save_predictions(self, X_test: pd.DataFrame, y_test: pd.DataFrame, predictions: pd.DataFrame):
-        """
-        Saves the predictions and test data to a CSV file.
-
-        Args:
-            X_test (pd.DataFrame): Test input data.
-            y_test (pd.DataFrame): Test output data.
-            predictions (pd.DataFrame): Model predictions.
-        """
-        results = pd.DataFrame(X_test, columns=[f'Input_{i}' for i in range(X_test.shape[1])])
-        
-        y_test = np.array(y_test)
-        predictions = np.array(predictions)
-        
-        if y_test.ndim > 1 and y_test.shape[1] > 1:
-            # Save each output column separately
-            for col in range(y_test.shape[1]):
-                results[f'True_Output_{col}'] = y_test[:, col]
-                results[f'Predicted_Output_{col}'] = predictions[:, col]
-        else:
-            results['True_Output'] = y_test.squeeze()
-            results['Predicted_Output'] = predictions.squeeze()
-
-        # Save the predictions
-        output_path = os.path.join(os.getcwd(), 'results', self.model_name, f'{self.model_name}_predictions.csv')
-        results.to_csv(output_path, index=False)
-        print(f"Predictions saved at: {output_path}")
+        print(f"Modelos guardados en: {model_path}")
 
     def predict(self, X_test: pd.DataFrame) -> np.ndarray:
-        """
-        Makes predictions with the trained SVR model.
+        if not hasattr(self, 'models') or not self.models:
+            raise ValueError("Model is not trained yet!")
+        predictions = np.zeros((X_test.shape[0], len(self.models)))
+        for i, model in enumerate(self.models):
+            predictions[:, i] = model.predict(X_test)
+        return predictions
 
-        Args:
-            X_test (pd.DataFrame): Test input data.
-
-        Returns:
-            np.ndarray: Model predictions.
-        """
-        y_pred = self.model.predict(X_test)
-        return y_pred
+    def predict_single_output(self, X_test: pd.DataFrame, output_index: int) -> np.ndarray:
+        if not hasattr(self, 'models') or not self.models:
+            raise ValueError("Model is not trained yet!")
+        if output_index < 0 or output_index >= len(self.models):
+            raise ValueError(f"Output index {output_index} is out of range.")
+        return self.models[output_index].predict(X_test)
 
     def evaluate(self, X_test: pd.DataFrame, y_test: pd.DataFrame, y_pred: np.ndarray, output_scaler=None) -> float:
-        """
-        Evaluates the model with the test data and saves the predictions.
+        print("Verificación de que y_test y y_pred tengan la misma forma:")
+        print("Forma de y_test:", y_test.shape)
+        print("Forma de y_pred:", y_pred.shape)
 
-        Args:
-            X_test (pd.DataFrame): Test input data.
-            y_test (pd.DataFrame): Test output data.
-            y_pred (np.ndarray): Model predictions.
-            output_scaler (optional): Scaler used to transform the outputs during preprocessing.
+        # Convert to numpy arrays for consistency
+        y_test_np = y_test.to_numpy()
+        y_pred_np = y_pred
 
-        Returns:
-            float: The MSE in the scaled form.
-        """
-        # Save the predictions
-        self.save_predictions(X_test, y_test, y_pred)
+        # Calculate MSE (mean over all outputs)
+        mse_scaled = np.mean(mean_squared_error(y_test_np, y_pred_np, multioutput='raw_values'))
+        print(f"MSE en escala normalizada: {mse_scaled:.4f}")
+        mse_percentage = (mse_scaled / np.mean(np.abs(y_test_np))) * 100 if np.mean(np.abs(y_test_np)) != 0 else 0 # MSE en porcentaje
+        print(f"MSE en porcentaje: {mse_percentage:.2f}%")
 
-        # Calculate the MSE in the current scale
-        mse_scaled = np.mean((y_pred - y_test) ** 2)
-        print(f"MSE in scaled form: {mse_scaled}")
+        # Calculate MAE (mean over all outputs)
+        mae_scaled = np.mean(mean_absolute_error(y_test_np, y_pred_np, multioutput='raw_values'))
+        mae_percentage = (mae_scaled / np.mean(np.abs(y_test_np))) * 100 if np.mean(np.abs(y_test_np)) != 0 else 0 # MAE en porcentaje
+        print(f"MAE en escala normalizada: {mae_scaled:.4f}")
+        print(f"MAE en porcentaje: {mae_percentage:.2f}%")
 
-        # If the scaler is provided, also calculate the MSE in the original scale
+        print(f"Diferencia entre MSE y MAE = {abs(mse_percentage-mae_percentage):.2f}%")
+
+        # Calculate BIC
+        bic_value = self.calculate_bic(y_test, y_pred)
+        print(f"Valor de BIC: {bic_value:.2f}")
+
         if output_scaler is not None:
             y_pred_original = output_scaler.inverse_transform(y_pred.reshape(-1, y_test.shape[1]))
             y_test_original = output_scaler.inverse_transform(y_test.to_numpy())
-            mse_original = np.mean((y_pred_original - y_test_original) ** 2)
-            print(f"MSE in original scale: {mse_original}")
+            mse_original = np.mean(mean_squared_error(y_test_original, y_pred_original, multioutput='raw_values'))
+            print(f"MSE en escala original: {mse_original}")
 
-        # Generate the report for metrics
-        report_generator = ModelReportGenerator(
-            model=self,
-            train_losses=[],  # No training loss history for SVR
-            val_losses=[],
-            X_train=self.X_train,
-            y_train=self.y_train,
-            X_test=X_test,
-            y_test=y_test,
-            model_name=self.model_name
-        )
-        report_generator.save_model_and_metrics()
+            # Calcular MAE en la escala original
+            mae_original = np.mean(mean_absolute_error(y_test_original, y_pred_original, multioutput='raw_values'))
+            mae_original_percentage = (mae_original / np.mean(np.abs(y_test_original))) * 100 if np.mean(np.abs(y_test_original)) != 0 else 0
+            print(f"MAE en escala original: {mae_original}")
+            print(f"MAE en escala original (porcentaje): {mae_original_percentage:.2f}%")
+
+        # Calcular la diferencia entre el training loss y el validation loss en porcentaje (promedio)
+        if len(self.train_losses) > 0 and len(self.val_losses) > 0:
+            mean_train_loss = np.mean(self.train_losses)
+            mean_val_loss = np.mean(self.val_losses)
+            loss_difference_percentage = ((mean_train_loss - mean_val_loss) / mean_train_loss) * 100 if mean_train_loss != 0 else 0
+            print(f"Diferencia entre Training Loss y Validation Loss: {loss_difference_percentage:.2f}%")
+
+        print(f"Este es el diccionario que se come el modelo: {self.rom_config}")
 
         return mse_scaled

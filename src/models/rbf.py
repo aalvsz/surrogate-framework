@@ -12,63 +12,63 @@ class RBFROM(idkROM.Modelo):
     A class for creating and training a Radial Basis Function (RBF) model.
     """
 
-    def __init__(self, gamma: float = 1.0):
+    def __init__(self, rom_config, random_state):
         """
         Initializes the RBF model with the given parameters.
 
         Args:
             gamma (float): The gamma parameter for the RBF kernel.
         """
-        super().__init__()
+        super().__init__(rom_config, random_state)
+        # Extraer parámetros de configuración
+        self.gamma = rom_config['hyperparams']['gamma']
+        self.random_state = random_state
 
-        self.gamma = gamma
-        self.model_name = 'rbf'
-        self.model = None
+
+        self.model_name = rom_config['model_name']
+
 
         # Variables for reporting (will be filled during training)
         self.X_train = None
         self.y_train = None
         self.X_val = None
         self.y_val = None
+        self.train_losses = []
+        self.val_losses = [] 
+        self.weights = None
+        self.model = None
 
-    def get_params(self, deep=True):
+    def calculate_bic(self, y_true, y_pred):
         """
-        Get parameters for this estimator.
+        Calculates the Bayesian Information Criterion (BIC) for the RBF model.
 
         Args:
-            deep (bool): If True, will return the parameters for this estimator and contained subobjects that are estimators.
+            y_true (np.ndarray or pd.DataFrame): True labels for the test data.
+            y_pred (np.ndarray): Predictions made by the model on the test data.
 
         Returns:
-            dict: Parameter names mapped to their values.
+            float: The BIC value.
         """
-        return {
-            'gamma': self.gamma
-        }
+        n = len(y_true)
+        if n == 0:
+            return np.inf  # Return infinity if no test data
 
-    def set_params(self, **params):
-        """
-        Set the parameters of this estimator.
+        # Convert y_true to a NumPy array if it's a DataFrame
+        if isinstance(y_true, pd.DataFrame):
+            y_true_np = y_true.values
+        else:
+            y_true_np = y_true
 
-        Args:
-            **params: Estimator parameters.
+        # Ensure y_true_np has the same shape as y_pred for element-wise comparison
+        if y_true_np.shape != y_pred.shape:
+            raise ValueError(f"Shape mismatch: y_true shape is {y_true_np.shape}, y_pred shape is {y_pred.shape}. They should be the same for BIC calculation.")
 
-        Returns:
-            self: Estimator instance.
-        """
-        for key, value in params.items():
-            setattr(self, key, value)
-        return self
-
-    def fit(self, X_train, y_train):
-        """
-        Fits the RBF model to the training data.
-        
-        Args:
-            X_train (pd.DataFrame): Training input data.
-            y_train (pd.DataFrame): Training target data.
-        """
-        self.train(X_train, y_train, X_train, y_train)
-
+        mse = np.mean((y_pred - y_true_np) ** 2)
+        sse = mse * n
+        # For RBF, the number of parameters can be approximated by the number of basis functions (training samples) plus the number of output dimensions.
+        num_params = self.X_train.shape[0] * self.y_train.shape[1] if self.X_train is not None and self.y_train is not None else 0
+        bic = n * np.log(sse) + num_params * np.log(n)
+        return bic
 
     def train(self, X_train: pd.DataFrame, y_train: pd.DataFrame, X_val: pd.DataFrame, y_val: pd.DataFrame):
         """
@@ -90,7 +90,20 @@ class RBFROM(idkROM.Modelo):
 
         # For simplicity, we use a least squares regression to get the weights of the model
         # using the RBF kernel matrix
-        self.weights = np.linalg.pinv(self.model) @ y_train
+        self.weights = np.linalg.pinv(self.model) @ y_train.to_numpy() # Ensure y_train is a numpy array
+
+        # For consistency with the neural network training loop, we can calculate a "training loss"
+        y_train_pred = self.predict(X_train)
+        mse_train = mean_squared_error(y_train, y_train_pred)
+        self.train_losses.append(mse_train)
+        print(f"Training MSE: {mse_train}")
+
+        # Similarly, calculate a "validation loss"
+        y_val_pred = self.predict(X_val)
+        mse_val = mean_squared_error(y_val, y_val_pred)
+        self.val_losses.append(mse_val)
+        print(f"Validation MSE: {mse_val}")
+
 
         # Save the model
         output_folder = os.path.join(os.getcwd(), 'results', self.model_name)
@@ -133,64 +146,64 @@ class RBFROM(idkROM.Modelo):
         Returns:
             float: The MSE in the scaled form.
         """
-        # Save predictions
-        self.save_predictions(X_test, y_test, y_pred)
+        print("Verificación de que y_test y y_pred tengan la misma forma:")
+        print("Forma de y_test:", y_test.shape)
+        print("Forma de y_pred:", y_pred.shape)
+
+        # Convert to numpy arrays for consistency
+        y_test_np = y_test.to_numpy()
+        y_pred_np = y_pred
 
         # Calculate MSE
-        mse_scaled = mean_squared_error(y_test, y_pred)
-        print(f"MSE in normalized scale: {mse_scaled}")
+        mse_scaled = mean_squared_error(y_test_np, y_pred_np)
+        print(f"MSE en escala normalizada: {mse_scaled:.4f}")
+        mse_percentage = (mse_scaled / np.mean(np.abs(y_test_np))) * 100 if np.mean(np.abs(y_test_np)) != 0 else 0 # MSE en porcentaje
+        print(f"MSE en porcentaje: {mse_percentage:.2f}%")
+
+        # Calculate MAE
+        mae_scaled = np.mean(np.abs(y_pred_np - y_test_np))
+        mae_percentage = (mae_scaled / np.mean(np.abs(y_test_np))) * 100 if np.mean(np.abs(y_test_np)) != 0 else 0 # MAE en porcentaje
+        print(f"MAE en escala normalizada: {mae_scaled:.4f}")
+        print(f"MAE en porcentaje: {mae_percentage:.2f}%")
+
+        print(f"Diferencia entre MSE y MAE = {abs(mse_percentage-mae_percentage):.2f}%")
+
+        # Calculate BIC
+        bic_value = self.calculate_bic(y_test, y_pred)
+        print(f"Valor de BIC: {bic_value:.2f}")
 
         # If output_scaler is provided, calculate the MSE in the original scale
         if output_scaler is not None:
             y_pred_original = output_scaler.inverse_transform(y_pred)
             y_test_original = output_scaler.inverse_transform(y_test.to_numpy())
             mse_original = mean_squared_error(y_test_original, y_pred_original)
-            print(f"MSE in original scale: {mse_original}")
+            print(f"MSE en escala original: {mse_original}")
+
+            # Calcular MAE en la escala original
+            mae_original = np.mean(np.abs(y_pred_original - y_test_original))
+            mae_original_percentage = (mae_original / np.mean(np.abs(y_test_original))) * 100 if np.mean(np.abs(y_test_original)) != 0 else 0
+            print(f"MAE en escala original: {mae_original}")
+            print(f"MAE en escala original (porcentaje): {mae_original_percentage:.2f}%")
+
+        # Calcular la diferencia entre el training loss y el validation loss en porcentaje
+        if len(self.train_losses) > 0 and len(self.val_losses) > 0:
+            last_train_loss = self.train_losses[-1]
+            last_val_loss = self.val_losses[-1]
+            loss_difference_percentage = ((last_train_loss - last_val_loss) / last_train_loss) * 100 if last_train_loss != 0 else 0
+            print(f"Diferencia entre Training Loss y Validation Loss: {loss_difference_percentage:.2f}%")
+
+        print(f"Este es el diccionario que se come el modelo: {self.rom_config}")
 
         # Generate the report for metrics
         report_generator = ModelReportGenerator(
             model=self,
-            train_losses=[],  # For RBF, no training loss history
-            val_losses=[],
+            train_losses=self.train_losses,  # Now includes training losses
+            val_losses=self.val_losses,    # Now includes validation losses
             X_train=self.X_train,
             y_train=self.y_train,
             X_test=X_test,
             y_test=y_test,
             model_name=self.model_name
         )
-        report_generator.save_model_and_metrics()
 
         return mse_scaled
-
-    def save_predictions(self, X_test: pd.DataFrame, y_test: pd.DataFrame, predictions: np.ndarray):
-        """
-        Saves the predictions and test data to a CSV file.
-
-        Args:
-            X_test (pd.DataFrame): Test input data.
-            y_test (pd.DataFrame): Test output data.
-            predictions (np.ndarray): Model predictions, can be 1D or 2D array.
-        """
-        # Create DataFrame with input features
-        results = pd.DataFrame(X_test, columns=[f'Input_{i}' for i in range(X_test.shape[1])])
-        
-        # Convert predictions to numpy array if it's not already
-        predictions = np.array(predictions)
-        
-        # Handle multiple outputs
-        if isinstance(y_test, pd.DataFrame) and y_test.shape[1] > 1:
-            for col in range(y_test.shape[1]):
-                results[f'True_Output_{col}'] = y_test.iloc[:, col]
-                if predictions.ndim > 1:
-                    results[f'Predicted_Output_{col}'] = predictions[:, col]
-                else:
-                    results[f'Predicted_Output_{col}'] = predictions
-        else:
-            # Single output
-            results['True_Output'] = y_test.squeeze()
-            results['Predicted_Output'] = predictions.squeeze()
-
-        # Save the predictions
-        output_path = os.path.join(os.getcwd(), 'results', self.model_name, f'{self.model_name}_predictions.csv')
-        results.to_csv(output_path, index=False)
-        print(f"Predictions saved at: {output_path}")
