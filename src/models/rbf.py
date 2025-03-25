@@ -5,7 +5,7 @@ from sklearn.metrics import mean_squared_error
 from sklearn.metrics.pairwise import rbf_kernel
 import joblib
 from src.idkrom import idkROM
-from src.visualization.metrics import ModelReportGenerator
+from src.visualization.metrics import ErrorMetrics
 
 class RBFROM(idkROM.Modelo):
     """
@@ -194,16 +194,8 @@ class RBFROM(idkROM.Modelo):
 
         print(f"Este es el diccionario que se come el modelo: {self.rom_config}")
 
-        # Generate the report for metrics
-        report_generator = ModelReportGenerator(
-            model=self,
-            train_losses=self.train_losses,  # Now includes training losses
-            val_losses=self.val_losses,    # Now includes validation losses
-            X_train=self.X_train,
-            y_train=self.y_train,
-            X_test=X_test,
-            y_test=y_test,
-            model_name=self.model_name
-        )
+        # Create error visualization metrics
+        errors = ErrorMetrics(self, self.model_name, y_test, y_pred)
+        errors.create_error_graphs()
 
         return mse_scaled

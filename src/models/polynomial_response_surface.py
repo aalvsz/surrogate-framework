@@ -6,7 +6,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 import joblib
 from src.idkrom import idkROM
-from src.visualization.metrics import ModelReportGenerator
+from src.visualization.metrics import ErrorMetrics
 from scipy.special import comb
 
 class PolynomialResponseSurface(idkROM.Modelo):
@@ -144,14 +144,7 @@ class PolynomialResponseSurface(idkROM.Modelo):
 
         print(f"Este es el diccionario que se come el modelo: {self.rom_config}")
 
-        report_generator = ModelReportGenerator(
-            model=self,
-            train_losses=self.train_losses,
-            val_losses=self.val_losses,
-            X_train=self.X_train,
-            y_train=self.y_train,
-            X_test=X_test,
-            y_test=y_test,
-            model_name=self.model_name
-        )
+        # Create error visualization metrics
+        errors = ErrorMetrics(self, self.model_name, y_test, y_pred)
+        errors.create_error_graphs()
         return mse_scaled

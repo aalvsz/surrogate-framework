@@ -5,7 +5,7 @@ import joblib
 import pandas as pd
 import numpy as np
 from sklearn.metrics import mean_squared_error, mean_absolute_error
-from src.visualization.metrics import ModelReportGenerator
+from src.visualization.metrics import ErrorMetrics
 
 class SVRROM(idkROM.Modelo):
     """
@@ -171,5 +171,9 @@ class SVRROM(idkROM.Modelo):
             print(f"Diferencia entre Training Loss y Validation Loss: {loss_difference_percentage:.2f}%")
 
         print(f"Este es el diccionario que se come el modelo: {self.rom_config}")
+
+        # Create error visualization metrics
+        errors = ErrorMetrics(self, self.model_name, y_test, y_pred)
+        errors.create_error_graphs()
 
         return mse_scaled

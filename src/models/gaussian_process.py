@@ -4,7 +4,7 @@ import pandas as pd
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, Matern
 from src.idkrom import idkROM
-from src.visualization.metrics import ModelReportGenerator
+from src.visualization.metrics import ErrorMetrics
 import joblib
 
 class GaussianProcessROM(idkROM.Modelo):
@@ -129,6 +129,10 @@ class GaussianProcessROM(idkROM.Modelo):
             print(f"MAE en porcentaje (escala original): {mae_percentage_original:.2f}%")
 
             print(f"Diferencia entre MSE y MAE (escala original) = {abs(mse_percentage_original - mae_percentage_original):.2f}%")
+
+        # Create error visualization metrics
+        errors = ErrorMetrics(self, self.model_name, y_test, y_pred)
+        errors.create_error_graphs()
 
         return mse_scaled
 

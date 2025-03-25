@@ -3,9 +3,10 @@ import torch
 import pandas as pd
 import numpy as np
 import random
-from src.idkrom import idkROM
 from sklearn.model_selection import KFold
 from torch.optim.lr_scheduler import StepLR
+from src.idkrom import idkROM
+from src.visualization.metrics import ErrorMetrics
 
 class NeuralNetworkROM(idkROM.Modelo):
 
@@ -502,62 +503,7 @@ class NeuralNetworkROM(idkROM.Modelo):
 
         print(f"Este es el diccionario que se come el modelo: {self.rom_config}")
         
-
-        import matplotlib.pyplot as plt
-        """
-        Generates and displays visualization plots based on the model, test data, and predictions.
-
-        Args:
-            model: The trained model object (either SVRROM or NeuralNetworkROM).
-            X_test (pd.DataFrame or np.ndarray): Test input data.
-            y_test (pd.DataFrame or np.ndarray): True labels for the test data.
-            y_pred (np.ndarray): Predictions made by the model on the test data.
-        """
-        plt.figure(figsize=(15, 12))
-
-        # 1. Predicciones vs. Valores Reales
-        plt.subplot(2, 3, 1)
-        if isinstance(y_test, pd.DataFrame):
-            y_test_np = y_test.values
-        else:
-            y_test_np = y_test
-        plt.scatter(y_test_np.flatten(), y_pred.flatten())
-        plt.xlabel("Valores Reales")
-        plt.ylabel("Predicciones")
-        plt.title("Predicciones vs. Valores Reales")
-        plt.plot([y_test_np.min(), y_test_np.max()], [y_test_np.min(), y_test_np.max()], 'k--', lw=2) # Línea de referencia
-        plt.grid(True)
-
-        # 2. Distribución de Errores
-        plt.subplot(2, 3, 2)
-        errors = y_test_np.flatten() - y_pred.flatten()
-        plt.hist(errors, bins=50, edgecolor='black')
-        plt.xlabel("Error")
-        plt.ylabel("Frecuencia")
-        plt.title("Distribución de Errores")
-        plt.grid(True)
-
-        # 3. Errores vs. Predicciones
-        plt.subplot(2, 3, 5)
-        plt.scatter(y_pred.flatten(), errors)
-        plt.xlabel("Predicciones")
-        plt.ylabel("Error")
-        plt.title("Errores vs. Predicciones")
-        plt.axhline(y=0, color='r', linestyle='--') # Línea de referencia en cero
-        plt.grid(True)
-
-        # 4. Training and Validation Loss Curves (solo para NeuralNetworkROM)
-        if hasattr(self, 'train_losses') and hasattr(self, 'val_losses'):
-            plt.subplot(2, 3, 4)
-            epochs = range(1, len(self.train_losses) + 1)
-            plt.plot(epochs, self.train_losses, label='Pérdida de Entrenamiento')
-            plt.plot(epochs, self.val_losses, label='Pérdida de Validación')
-            plt.xlabel("Épocas")
-            plt.ylabel("Pérdida")
-            plt.title("Curvas de Pérdida de Entrenamiento y Validación")
-            plt.legend()
-            plt.grid(True)
-        
-        plt.tight_layout()
-        plt.show()
+        # Create error visualization metrics
+        errors = ErrorMetrics(self, self.model_name, y_test, y_pred, self.train_losses, self.val_losses)
+        errors.create_error_graphs()
         return 0

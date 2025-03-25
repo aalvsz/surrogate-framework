@@ -9,34 +9,34 @@ preprocess:
   test_size: 0.15
 
 model:
-  type: neural_network
-  hyperparams:
-    mode: default
-    params:
-      n_iter: 10 # only if mode: best
-      cv: 5 # only if mode: best
-
-      n_layers: 2 | 3 | 4
-      n_neurons: 20 | 50 | 100
-      activation: Tanh | ReLU | Sigmoid
-      optimizer: Adam | SGD
-      learning_rate: 0.001 | 0.01 | 0.1
-      #loss: [mse, mae, mape]
-      #metrics: [mae, mse, mape]
-      epochs: 500 | 1000 | 3000
-
-#  type: gaussian_process
+#  type: neural_network
 #  hyperparams:
-#    mode: manual
+#    mode: default
 #    params:
 #      n_iter: 10 # only if mode: best
 #      cv: 5 # only if mode: best
 #
-#      kernel: RBF 
-#      noise: 0.0001
-#      optimizer: fmin_l_bfgs_b
+#      n_layers: 2 | 3 | 4
+#      n_neurons: 20 | 50 | 100
+#      activation: Tanh | ReLU | Sigmoid
+#      optimizer: Adam | SGD
+#      learning_rate: 0.001 | 0.01 | 0.1
 #      #loss: [mse, mae, mape]
 #      #metrics: [mae, mse, mape]
+#      epochs: 500 | 1000 | 3000
+
+  type: gaussian_process
+  hyperparams:
+    mode: manual
+    params:
+      n_iter: 10 # only if mode: best
+      cv: 5 # only if mode: best
+
+      kernel: RBF 
+      noise: 0.0001
+      optimizer: fmin_l_bfgs_b
+      #loss: [mse, mae, mape]
+      #metrics: [mae, mse, mape]
 
 
 #  type: rbf
