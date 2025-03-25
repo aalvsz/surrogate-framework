@@ -557,3 +557,7 @@ class NeuralNetworkROM(idkROM.Modelo):
             plt.title("Curvas de Pérdida de Entrenamiento y Validación")
             plt.legend()
             plt.grid(True)
+        
+        plt.tight_layout()
+        plt.show()
+        return 0
