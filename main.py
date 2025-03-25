@@ -10,7 +10,7 @@ from src.models.svr import SVRROM
 
 if __name__ == "__main__":
 
-    random_state = 42
+    random_state = 41
 
     loader = DataLoader()
     config_dict = loader.read_yml(os.getcwd() + "/config.yml")

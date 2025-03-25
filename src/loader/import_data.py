@@ -43,13 +43,13 @@ class DataLoader:
         self.default_params = {
             'neural_network': {
                 'n_layers': 2,
-                'n_neurons': 5,
+                'n_neurons': 10,
                 'activation': 'Tanh',
                 'optimizer': 'Adam',
                 'learning_rate': 0.001,
                 #'loss': 'mse',
                 #'metrics': 'mae',
-                'epochs': 10000
+                'epochs': 1000
             },
             'gaussian_process': {
                 'kernel': 'RBF',

@@ -450,21 +450,27 @@ class NeuralNetworkROM(idkROM.Modelo):
         print("Forma de y_test:", y_test.shape)
         print("Forma de y_pred:", y_pred.shape)
 
-        # Convertir a tensores
-        y_test_tensor = torch.tensor(y_test.to_numpy(), dtype=torch.float32)
-        y_pred_tensor = torch.tensor(y_pred, dtype=torch.float32)
+        # Convertir a numpy arrays
+        y_test_np = y_test.to_numpy()
+        y_pred_np = np.array(y_pred)
 
         # Calcular MSE en la escala normalizada
-        mse_scaled = torch.nn.functional.mse_loss(y_pred_tensor, y_test_tensor).item()
-        mse_percentage = (mse_scaled / torch.mean(torch.abs(y_test_tensor))) * 100  # MSE en porcentaje
+        mse_scaled = np.mean((y_pred_np - y_test_np)**2)
+        mse_percentage = (mse_scaled / np.mean(np.abs(y_test_np))) * 100  # MSE en porcentaje
         print(f"MSE en escala normalizada: {mse_scaled:.4f}")
         print(f"MSE en porcentaje: {mse_percentage:.2f}%")
 
         # Calcular MAE normalizado
-        mae_scaled = torch.nn.functional.l1_loss(y_pred_tensor, y_test_tensor).item()
-        mae_percentage = (mae_scaled / torch.mean(torch.abs(y_test_tensor))) * 100  # MAE en porcentaje
+        mae_scaled = np.mean(np.abs(y_pred_np - y_test_np))
+        mae_percentage = (mae_scaled / np.mean(np.abs(y_test_np))) * 100  # MAE en porcentaje
         print(f"MAE en escala normalizada: {mae_scaled:.4f}")
         print(f"MAE en porcentaje: {mae_percentage:.2f}%")
+
+        # Calcular Mean Absolute Percentage Error (MAPE)
+        # Añadir una pequeña constante para evitar la división por cero
+        epsilon = 1e-10
+        mape = np.mean(np.abs((y_test_np - y_pred_np) / (y_test_np + epsilon))) * 100
+        print(f"MAPE: {mape:.2f}%")
 
         print(f"Diferencia entre MSE y MAE = {abs(mse_percentage-mae_percentage):.2f}%")
 
@@ -478,7 +484,7 @@ class NeuralNetworkROM(idkROM.Modelo):
             y_pred_original = output_scaler.inverse_transform(y_pred.reshape(-1, y_test.shape[1]))
             y_test_original = output_scaler.inverse_transform(y_test.to_numpy())
             mse_original = torch.nn.functional.mse_loss(torch.tensor(y_pred_original, dtype=torch.float32),
-                                                                         torch.tensor(y_test_original, dtype=torch.float32)).item()
+                                                                     torch.tensor(y_test_original, dtype=torch.float32)).item()
             print(f"MSE en escala original: {mse_original}")
 
             # Calcular MAE en la escala original
@@ -495,4 +501,59 @@ class NeuralNetworkROM(idkROM.Modelo):
             print(f"Diferencia entre Training Loss y Validation Loss: {loss_difference_percentage:.2f}%")
 
         print(f"Este es el diccionario que se come el modelo: {self.rom_config}")
-        return 0
+        
+
+        import matplotlib.pyplot as plt
+        """
+        Generates and displays visualization plots based on the model, test data, and predictions.
+
+        Args:
+            model: The trained model object (either SVRROM or NeuralNetworkROM).
+            X_test (pd.DataFrame or np.ndarray): Test input data.
+            y_test (pd.DataFrame or np.ndarray): True labels for the test data.
+            y_pred (np.ndarray): Predictions made by the model on the test data.
+        """
+        plt.figure(figsize=(15, 12))
+
+        # 1. Predicciones vs. Valores Reales
+        plt.subplot(2, 3, 1)
+        if isinstance(y_test, pd.DataFrame):
+            y_test_np = y_test.values
+        else:
+            y_test_np = y_test
+        plt.scatter(y_test_np.flatten(), y_pred.flatten())
+        plt.xlabel("Valores Reales")
+        plt.ylabel("Predicciones")
+        plt.title("Predicciones vs. Valores Reales")
+        plt.plot([y_test_np.min(), y_test_np.max()], [y_test_np.min(), y_test_np.max()], 'k--', lw=2) # Línea de referencia
+        plt.grid(True)
+
+        # 2. Distribución de Errores
+        plt.subplot(2, 3, 2)
+        errors = y_test_np.flatten() - y_pred.flatten()
+        plt.hist(errors, bins=50, edgecolor='black')
+        plt.xlabel("Error")
+        plt.ylabel("Frecuencia")
+        plt.title("Distribución de Errores")
+        plt.grid(True)
+
+        # 3. Errores vs. Predicciones
+        plt.subplot(2, 3, 5)
+        plt.scatter(y_pred.flatten(), errors)
+        plt.xlabel("Predicciones")
+        plt.ylabel("Error")
+        plt.title("Errores vs. Predicciones")
+        plt.axhline(y=0, color='r', linestyle='--') # Línea de referencia en cero
+        plt.grid(True)
+
+        # 4. Training and Validation Loss Curves (solo para NeuralNetworkROM)
+        if hasattr(self, 'train_losses') and hasattr(self, 'val_losses'):
+            plt.subplot(2, 3, 4)
+            epochs = range(1, len(self.train_losses) + 1)
+            plt.plot(epochs, self.train_losses, label='Pérdida de Entrenamiento')
+            plt.plot(epochs, self.val_losses, label='Pérdida de Validación')
+            plt.xlabel("Épocas")
+            plt.ylabel("Pérdida")
+            plt.title("Curvas de Pérdida de Entrenamiento y Validación")
+            plt.legend()
+            plt.grid(True)
