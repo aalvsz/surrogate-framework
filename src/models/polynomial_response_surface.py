@@ -28,16 +28,6 @@ class PolynomialResponseSurface(idkROM.Modelo):
         self.val_losses = []
 
     def calculate_bic(self, y_true, y_pred):
-        """
-        Calculates the Bayesian Information Criterion (BIC) for the polynomial model.
-
-        Args:
-            y_true (np.ndarray or pd.DataFrame): True labels for the test data.
-            y_pred (np.ndarray): Predictions made by the model on the test data.
-
-        Returns:
-            float: The BIC value.
-        """
         n = len(y_true)
         if n == 0:
             return np.inf  # Return infinity if no test data
@@ -96,50 +86,56 @@ class PolynomialResponseSurface(idkROM.Modelo):
         X_poly_test = self.poly.transform(X_test)
         return self.model.predict(X_poly_test)
 
-    def evaluate(self, X_test: pd.DataFrame, y_test: pd.DataFrame, y_pred: np.ndarray, output_scaler=None) -> float:
+    def evaluate(self, X_test: pd.DataFrame, y_test: pd.DataFrame, y_pred: np.ndarray, eval_metrics: str, output_scaler=None) -> float:
+        """
+        Evalúa el modelo con los datos de test y guarda las predicciones.
+        Si se proporciona 'output_scaler', también se calcula el MSE en la escala original.
+
+        Args:
+            X_test (pd.DataFrame): Datos de entrada del conjunto de test.
+            y_test (pd.DataFrame): Datos verdaderos de salida del conjunto de test.
+            y_pred (np.ndarray): Predicciones del modelo.
+            eval_metrics (str): Métrica de evaluación a utilizar.
+            output_scaler (opcional): Scaler usado para transformar los outputs durante el preprocesamiento.
+
+        Returns:
+            float: El MSE en la escala normalizada.
+        """
+
         print("Verificación de que y_test y y_pred tengan la misma forma:")
         print("Forma de y_test:", y_test.shape)
         print("Forma de y_pred:", y_pred.shape)
 
-        # Convert to numpy arrays for consistency
+        # Convertir a numpy arrays
         y_test_np = y_test.to_numpy()
-        y_pred_np = y_pred
+        y_pred_np = np.array(y_pred)
 
-        # Calculate MSE
-        mse_scaled = mean_squared_error(y_test_np, y_pred_np)
-        print(f"MSE en escala normalizada: {mse_scaled:.4f}")
-        mse_percentage = (mse_scaled / np.mean(np.abs(y_test_np))) * 100 if np.mean(np.abs(y_test_np)) != 0 else 0 # MSE en porcentaje
-        print(f"MSE en porcentaje: {mse_percentage:.2f}%")
+        if eval_metrics == 'mse':
+            mse_scaled = np.mean((y_pred_np - y_test_np) ** 2)
+            mse_percentage = (mse_scaled / np.mean(np.abs(y_test_np))) * 100
+            print(f"MSE en escala normalizada: {mse_scaled:.4f}")
+            print(f"MSE en porcentaje: {mse_percentage:.2f}%")
 
-        # Calculate MAE
-        mae_scaled = mean_absolute_error(y_test_np, y_pred_np)
-        mae_percentage = (mae_scaled / np.mean(np.abs(y_test_np))) * 100 if np.mean(np.abs(y_test_np)) != 0 else 0 # MAE en porcentaje
-        print(f"MAE en escala normalizada: {mae_scaled:.4f}")
-        print(f"MAE en porcentaje: {mae_percentage:.2f}%")
+        elif eval_metrics == 'mae':
+            mae_scaled = np.mean(np.abs(y_pred_np - y_test_np))
+            mae_percentage = (mae_scaled / np.mean(np.abs(y_test_np))) * 100
+            print(f"MAE en escala normalizada: {mae_scaled:.4f}")
+            print(f"MAE en porcentaje: {mae_percentage:.2f}%")
 
-        print(f"Diferencia entre MSE y MAE = {abs(mse_percentage-mae_percentage):.2f}%")
+        elif eval_metrics == 'mape':
+            epsilon = 1e-10
+            mape = np.mean(np.abs((y_test_np - y_pred_np) / (y_test_np + epsilon))) * 100
+            print(f"MAPE: {mape:.2f}%")
 
-        # Calculate BIC
+        # Calcular BIC
         bic_value = self.calculate_bic(y_test, y_pred)
         print(f"Valor de BIC: {bic_value:.2f}")
 
-        if output_scaler is not None:
-            y_pred_original = output_scaler.inverse_transform(y_pred)
-            y_test_original = output_scaler.inverse_transform(y_test.to_numpy())
-            mse_original = mean_squared_error(y_test_original, y_pred_original)
-            print(f"MSE en escala original: {mse_original}")
-
-            # Calcular MAE en la escala original
-            mae_original = mean_absolute_error(y_test_original, y_pred_original)
-            mae_original_percentage = (mae_original / np.mean(np.abs(y_test_original))) * 100 if np.mean(np.abs(y_test_original)) != 0 else 0
-            print(f"MAE en escala original: {mae_original}")
-            print(f"MAE en escala original (porcentaje): {mae_original_percentage:.2f}%")
-
         # Calcular la diferencia entre el training loss y el validation loss en porcentaje
-        if len(self.train_losses) > 0 and len(self.val_losses) > 0:
+        if hasattr(self, 'train_losses') and hasattr(self, 'val_losses') and len(self.train_losses) > 0 and len(self.val_losses) > 0:
             last_train_loss = self.train_losses[-1]
             last_val_loss = self.val_losses[-1]
-            loss_difference_percentage = ((last_train_loss - last_val_loss) / last_train_loss) * 100 if last_train_loss != 0 else 0
+            loss_difference_percentage = ((last_train_loss - last_val_loss) / last_train_loss) * 100
             print(f"Diferencia entre Training Loss y Validation Loss: {loss_difference_percentage:.2f}%")
 
         print(f"Este es el diccionario que se come el modelo: {self.rom_config}")
@@ -147,4 +143,5 @@ class PolynomialResponseSurface(idkROM.Modelo):
         # Create error visualization metrics
         errors = ErrorMetrics(self, self.model_name, y_test, y_pred)
         errors.create_error_graphs()
+
         return mse_scaled

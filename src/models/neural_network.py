@@ -434,7 +434,7 @@ class NeuralNetworkROM(idkROM.Modelo):
         bic = n * np.log(sse) + num_params * np.log(n)
         return bic
 
-    def evaluate(self, X_test:list, y_test:list, y_pred:list, output_scaler=None):
+    def evaluate(self, X_test:list, y_test:list, y_pred:list, eval_metrics:str, output_scaler=None):
         """
         Evaluates the model using the test data and saves the predictions to a CSV file.
 
@@ -455,25 +455,26 @@ class NeuralNetworkROM(idkROM.Modelo):
         y_test_np = y_test.to_numpy()
         y_pred_np = np.array(y_pred)
 
-        # Calcular MSE en la escala normalizada
-        mse_scaled = np.mean((y_pred_np - y_test_np)**2)
-        mse_percentage = (mse_scaled / np.mean(np.abs(y_test_np))) * 100  # MSE en porcentaje
-        print(f"MSE en escala normalizada: {mse_scaled:.4f}")
-        print(f"MSE en porcentaje: {mse_percentage:.2f}%")
+        if eval_metrics == 'mse':
+            # Calcular MSE en la escala normalizada
+            mse_scaled = np.mean((y_pred_np - y_test_np)**2)
+            mse_percentage = (mse_scaled / np.mean(np.abs(y_test_np))) * 100  # MSE en porcentaje
+            print(f"MSE en escala normalizada: {mse_scaled:.4f}")
+            print(f"MSE en porcentaje: {mse_percentage:.2f}%")
 
-        # Calcular MAE normalizado
-        mae_scaled = np.mean(np.abs(y_pred_np - y_test_np))
-        mae_percentage = (mae_scaled / np.mean(np.abs(y_test_np))) * 100  # MAE en porcentaje
-        print(f"MAE en escala normalizada: {mae_scaled:.4f}")
-        print(f"MAE en porcentaje: {mae_percentage:.2f}%")
+        elif eval_metrics == 'mae':
+            # Calcular MAE normalizado
+            mae_scaled = np.mean(np.abs(y_pred_np - y_test_np))
+            mae_percentage = (mae_scaled / np.mean(np.abs(y_test_np))) * 100  # MAE en porcentaje
+            print(f"MAE en escala normalizada: {mae_scaled:.4f}")
+            print(f"MAE en porcentaje: {mae_percentage:.2f}%")
 
-        # Calcular Mean Absolute Percentage Error (MAPE)
-        # Añadir una pequeña constante para evitar la división por cero
-        epsilon = 1e-10
-        mape = np.mean(np.abs((y_test_np - y_pred_np) / (y_test_np + epsilon))) * 100
-        print(f"MAPE: {mape:.2f}%")
-
-        print(f"Diferencia entre MSE y MAE = {abs(mse_percentage-mae_percentage):.2f}%")
+        elif eval_metrics == 'mape':
+            # Calcular Mean Absolute Percentage Error (MAPE)
+            # Añadir una pequeña constante para evitar la división por cero
+            epsilon = 1e-10
+            mape = np.mean(np.abs((y_test_np - y_pred_np) / (y_test_np + epsilon))) * 100
+            print(f"MAPE: {mape:.2f}%")
 
         # Calcular BIC
         bic_value = self.calculate_bic(y_test, y_pred)

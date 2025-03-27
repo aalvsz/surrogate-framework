@@ -30,7 +30,7 @@ class idkROM(ABC):
             raise NotImplementedError
         
         @abstractmethod
-        def evaluate(self, X_test, y_test, y_pred):
+        def evaluate(self, X_test, y_test, y_pred, eval_metrics):
             """Método a sobrescribir en cada subclase"""
             raise NotImplementedError
 

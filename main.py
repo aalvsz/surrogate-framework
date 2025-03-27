@@ -21,6 +21,7 @@ if __name__ == "__main__":
     model_name = config_dict['model type']
     hyperparams = config_dict['hyperparams']
     mode = config_dict['mode']
+    eval_metrics = config_dict['eval metrics']
     default_params = loader.default_params
 
     if data_source == "raw":
@@ -82,6 +83,6 @@ if __name__ == "__main__":
     y_pred = model.predict(X_test_normalized)
 
     ##### EVALUACION
-    model.evaluate(X_test_normalized, y_test_normalized, y_pred)
+    model.evaluate(X_test_normalized, y_test_normalized, y_pred, eval_metrics)
     
         

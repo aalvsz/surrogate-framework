@@ -133,57 +133,51 @@ class RBFROM(idkROM.Modelo):
         # Predict using the RBF model weights
         return rbf_test @ self.weights
 
-    def evaluate(self, X_test: pd.DataFrame, y_test: pd.DataFrame, y_pred: np.ndarray, output_scaler=None) -> float:
+    def evaluate(self, X_test: pd.DataFrame, y_test: pd.DataFrame, y_pred: np.ndarray, eval_metrics: str, output_scaler=None) -> float:
         """
-        Evaluates the model with the test data and saves the predictions.
+        Evalúa el modelo con los datos de test y guarda las predicciones.
+        Si se proporciona 'output_scaler', también se calcula el MSE en la escala original.
 
         Args:
-            X_test (pd.DataFrame): Test input data.
-            y_test (pd.DataFrame): True output data for the test set.
-            y_pred (np.ndarray): Model predictions.
-            output_scaler (optional): Scaler used to transform the outputs during preprocessing.
+            X_test (pd.DataFrame): Datos de entrada del conjunto de test.
+            y_test (pd.DataFrame): Datos verdaderos de salida del conjunto de test.
+            y_pred (np.ndarray): Predicciones del modelo.
+            eval_metrics (str): Métrica de evaluación a utilizar.
+            output_scaler (opcional): Scaler usado para transformar los outputs durante el preprocesamiento.
 
         Returns:
-            float: The MSE in the scaled form.
+            float: El MSE en la escala normalizada.
         """
+
         print("Verificación de que y_test y y_pred tengan la misma forma:")
         print("Forma de y_test:", y_test.shape)
         print("Forma de y_pred:", y_pred.shape)
 
-        # Convert to numpy arrays for consistency
+        # Convertir a numpy arrays para mayor consistencia
         y_test_np = y_test.to_numpy()
-        y_pred_np = y_pred
+        y_pred_np = np.array(y_pred)
 
-        # Calculate MSE
-        mse_scaled = mean_squared_error(y_test_np, y_pred_np)
-        print(f"MSE en escala normalizada: {mse_scaled:.4f}")
-        mse_percentage = (mse_scaled / np.mean(np.abs(y_test_np))) * 100 if np.mean(np.abs(y_test_np)) != 0 else 0 # MSE en porcentaje
-        print(f"MSE en porcentaje: {mse_percentage:.2f}%")
+        # Evaluar con la métrica solicitada
+        if eval_metrics == 'mse':
+            mse_scaled = np.mean((y_pred_np - y_test_np) ** 2)
+            mse_percentage = (mse_scaled / np.mean(np.abs(y_test_np))) * 100 if np.mean(np.abs(y_test_np)) != 0 else 0
+            print(f"MSE en escala normalizada: {mse_scaled:.4f}")
+            print(f"MSE en porcentaje: {mse_percentage:.2f}%")
 
-        # Calculate MAE
-        mae_scaled = np.mean(np.abs(y_pred_np - y_test_np))
-        mae_percentage = (mae_scaled / np.mean(np.abs(y_test_np))) * 100 if np.mean(np.abs(y_test_np)) != 0 else 0 # MAE en porcentaje
-        print(f"MAE en escala normalizada: {mae_scaled:.4f}")
-        print(f"MAE en porcentaje: {mae_percentage:.2f}%")
+        elif eval_metrics == 'mae':
+            mae_scaled = np.mean(np.abs(y_pred_np - y_test_np))
+            mae_percentage = (mae_scaled / np.mean(np.abs(y_test_np))) * 100 if np.mean(np.abs(y_test_np)) != 0 else 0
+            print(f"MAE en escala normalizada: {mae_scaled:.4f}")
+            print(f"MAE en porcentaje: {mae_percentage:.2f}%")
 
-        print(f"Diferencia entre MSE y MAE = {abs(mse_percentage-mae_percentage):.2f}%")
+        elif eval_metrics == 'mape':
+            epsilon = 1e-10
+            mape = np.mean(np.abs((y_test_np - y_pred_np) / (y_test_np + epsilon))) * 100
+            print(f"MAPE: {mape:.2f}%")
 
-        # Calculate BIC
+        # Calcular BIC
         bic_value = self.calculate_bic(y_test, y_pred)
         print(f"Valor de BIC: {bic_value:.2f}")
-
-        # If output_scaler is provided, calculate the MSE in the original scale
-        if output_scaler is not None:
-            y_pred_original = output_scaler.inverse_transform(y_pred)
-            y_test_original = output_scaler.inverse_transform(y_test.to_numpy())
-            mse_original = mean_squared_error(y_test_original, y_pred_original)
-            print(f"MSE en escala original: {mse_original}")
-
-            # Calcular MAE en la escala original
-            mae_original = np.mean(np.abs(y_pred_original - y_test_original))
-            mae_original_percentage = (mae_original / np.mean(np.abs(y_test_original))) * 100 if np.mean(np.abs(y_test_original)) != 0 else 0
-            print(f"MAE en escala original: {mae_original}")
-            print(f"MAE en escala original (porcentaje): {mae_original_percentage:.2f}%")
 
         # Calcular la diferencia entre el training loss y el validation loss en porcentaje
         if len(self.train_losses) > 0 and len(self.val_losses) > 0:
@@ -192,9 +186,22 @@ class RBFROM(idkROM.Modelo):
             loss_difference_percentage = ((last_train_loss - last_val_loss) / last_train_loss) * 100 if last_train_loss != 0 else 0
             print(f"Diferencia entre Training Loss y Validation Loss: {loss_difference_percentage:.2f}%")
 
-        print(f"Este es el diccionario que se come el modelo: {self.rom_config}")
+        print(f"Este es el diccionario que se consume el modelo: {self.rom_config}")
 
-        # Create error visualization metrics
+        # Si se proporciona un scaler para los outputs, calcular MSE y MAE en la escala original
+        if output_scaler is not None:
+            y_pred_original = output_scaler.inverse_transform(y_pred_np)
+            y_test_original = output_scaler.inverse_transform(y_test_np)
+            
+            mse_original = np.mean((y_test_original - y_pred_original) ** 2)
+            print(f"MSE en escala original: {mse_original:.4f}")
+
+            mae_original = np.mean(np.abs(y_pred_original - y_test_original))
+            mae_original_percentage = (mae_original / np.mean(np.abs(y_test_original))) * 100 if np.mean(np.abs(y_test_original)) != 0 else 0
+            print(f"MAE en escala original: {mae_original:.4f}")
+            print(f"MAE en escala original (porcentaje): {mae_original_percentage:.2f}%")
+
+        # Crear visualización de errores
         errors = ErrorMetrics(self, self.model_name, y_test, y_pred)
         errors.create_error_graphs()
 

@@ -39,6 +39,13 @@ class DataLoader:
         hyper_params_config = model_config['hyperparams']
         mode = hyper_params_config['mode']
 
+        # Evaluacion
+        evaluate = config['evaluate']
+        metrics = evaluate.get('metrics', 'mse')
+        plot = evaluate.get('plot', 'True')
+        save = evaluate.get('save', 'True')
+
+
         # Definir hiperparámetros por defecto
         self.default_params = {
             'neural_network': {
@@ -94,12 +101,6 @@ class DataLoader:
         for key, value in hyper_params.items():
             hyper_params[key] = parse_options(value)
 
-        # Evaluación
-        evaluate = config['evaluate']
-        eval_metrics = evaluate.get('metrics', 'mae')
-        plot = evaluate.get('plot', False)
-        save = evaluate.get('save', False)
-
         return {
             'data inputs': data_input,
             'data outputs': data_output,
@@ -110,7 +111,7 @@ class DataLoader:
             'model type': model_type,
             'mode': mode,
             'hyperparams': hyper_params,
-            'eval metrics': eval_metrics,
+            'eval metrics': metrics,
             'plot': plot,
             'save': save
         }

@@ -88,7 +88,7 @@ Subajuste (Underfitting): Si ambas curvas de pérdida permanecen relativamente a
  - **Ajuste óptimo:** Un buen ajuste se suele observar cuando ambas pérdidas disminuyen a un valor bajo y se estabilizan, con la pérdida de validación ligeramente superior a la pérdida de entrenamiento.
 Brecha entre curvas: Una gran diferencia entre la pérdida de entrenamiento y la pérdida de validación también puede ser una señal de sobreajuste o de que los conjuntos de entrenamiento y validación son muy diferentes.
 
-![Captura de pantalla de las métricas de errores para la red neuronal](images/error_metrics_neural_network.jpg)
+![Captura de pantalla de las métricas de errores para la red neuronal](images/error_metrics_neural_network.png)
 
 
 ## Contributing

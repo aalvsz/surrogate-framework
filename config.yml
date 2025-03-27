@@ -1,54 +1,57 @@
+idk_params:
+  n_capas: [model,hyperparams,params,n_layers]
+  n_neuronas: [model,hypeparmas, params, n_neurons]
+
 data:
-  input: D:\\idkROM\\idkROM\\data\\dataset_entrada.csv
-  output: D:\\idkROM\\idkROM\\data\\dataset_salida.csv
+  input: D:\\idkROM\\idkROM\\data\\main_platoHydr_idkFEM_DOE_Results copy_inputs.csv
+  output: D:\\idkROM\\idkROM\\data\\main_platoHydr_idkFEM_DOE_Results copy_outputs.csv
 
 preprocess:
-  read mode: pre
+  read mode: raw
   scaler: MinMaxScaler
   validation: single | cross
   test_size: 0.15
+  validation_size: 
 
 model:
 #  type: neural_network
-#  hyperparams:
-#    mode: default
-#    params:
-#      n_iter: 10 # only if mode: best
-#      cv: 5 # only if mode: best
-#
-#      n_layers: 2 | 3 | 4
-#      n_neurons: 20 | 50 | 100
-#      activation: Tanh | ReLU | Sigmoid
-#      optimizer: Adam | SGD
-#      learning_rate: 0.001 | 0.01 | 0.1
-#      #loss: [mse, mae, mape]
-#      #metrics: [mae, mse, mape]
-#      epochs: 500 | 1000 | 3000
-
-  type: gaussian_process
-  hyperparams:
-    mode: manual
-    params:
-      n_iter: 10 # only if mode: best
-      cv: 5 # only if mode: best
-
-      kernel: RBF 
-      noise: 0.0001
-      optimizer: fmin_l_bfgs_b
-      #loss: [mse, mae, mape]
-      #metrics: [mae, mse, mape]
-
-
-#  type: rbf
 #  hyperparams:
 #    mode: manual
 #    params:
 #      n_iter: 10 # only if mode: best
 #      cv: 5 # only if mode: best
 #
-#      gamma: 1.0 
+#      n_layers: 4
+#      n_neurons: 5
+#      activation: Tanh
+#      optimizer: Adam
+#      learning_rate: 0.01
 #      #loss: [mse, mae, mape]
-#      #metrics: [mae, mse, mape]
+#      epochs: 1000
+
+#  type: gaussian_process
+#  hyperparams:
+#    mode: manual
+#    params:
+#      n_iter: 10 # only if mode: best
+#      cv: 5 # only if mode: best
+#
+#      kernel: RBF 
+#      noise: 0.0001
+#      optimizer: fmin_l_bfgs_b
+#      #loss: [mse, mae, mape]
+
+
+  type: rbf
+  hyperparams:
+    mode: manual
+    params:
+      n_iter: 10 # only if mode: best
+      cv: 5 # only if mode: best
+
+      gamma: 1.0 
+      #loss: [mse, mae, mape]
+      #metrics: [mae, mse, mape]
 
 
 #  type: response_surface
@@ -60,7 +63,6 @@ model:
 #
 #      degree: 2 
 #      #loss: [mse, mae, mape]
-#      #metrics: [mae, mse, mape]
 
 
 #  type: svr
@@ -74,10 +76,9 @@ model:
 #      C: 1.0
 #      epsilon: 0.1
 #      #loss: [mse, mae, mape]
-#      #metrics: [mae, mse, mape]
 
 
 evaluate:
-  metrics: mae | mse | mape
-  plot: True | False
-  save: True | False
+  metrics: mse
+  plot: True 
+  save: True

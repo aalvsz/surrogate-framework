@@ -124,30 +124,48 @@ class SVRROM(idkROM.Modelo):
             raise ValueError(f"Output index {output_index} is out of range.")
         return self.models[output_index].predict(X_test)
 
-    def evaluate(self, X_test: pd.DataFrame, y_test: pd.DataFrame, y_pred: np.ndarray, output_scaler=None) -> float:
+    def evaluate(self, X_test: pd.DataFrame, y_test: pd.DataFrame, y_pred: np.ndarray, eval_metrics: str, output_scaler=None) -> float:
+        """
+        Evalúa el modelo con los datos de test y guarda las predicciones.
+        Si se proporciona 'output_scaler', también se calcula el MSE en la escala original.
+
+        Args:
+            X_test (pd.DataFrame): Datos de entrada del conjunto de test.
+            y_test (pd.DataFrame): Datos verdaderos de salida del conjunto de test.
+            y_pred (np.ndarray): Predicciones del modelo.
+            eval_metrics (str): Métrica de evaluación a utilizar.
+            output_scaler (opcional): Scaler usado para transformar los outputs durante el preprocesamiento.
+
+        Returns:
+            float: El MSE en la escala normalizada.
+        """
+
         print("Verificación de que y_test y y_pred tengan la misma forma:")
         print("Forma de y_test:", y_test.shape)
         print("Forma de y_pred:", y_pred.shape)
 
-        # Convert to numpy arrays for consistency
+        # Convertir a numpy arrays
         y_test_np = y_test.to_numpy()
-        y_pred_np = y_pred
+        y_pred_np = np.array(y_pred)
 
-        # Calculate MSE (mean over all outputs)
-        mse_scaled = np.mean(mean_squared_error(y_test_np, y_pred_np, multioutput='raw_values'))
-        print(f"MSE en escala normalizada: {mse_scaled:.4f}")
-        mse_percentage = (mse_scaled / np.mean(np.abs(y_test_np))) * 100 if np.mean(np.abs(y_test_np)) != 0 else 0 # MSE en porcentaje
-        print(f"MSE en porcentaje: {mse_percentage:.2f}%")
+        if eval_metrics == 'mse':
+            mse_scaled = np.mean(mean_squared_error(y_test_np, y_pred_np, multioutput='raw_values'))
+            mse_percentage = (mse_scaled / np.mean(np.abs(y_test_np))) * 100 if np.mean(np.abs(y_test_np)) != 0 else 0
+            print(f"MSE en escala normalizada: {mse_scaled:.4f}")
+            print(f"MSE en porcentaje: {mse_percentage:.2f}%")
 
-        # Calculate MAE (mean over all outputs)
-        mae_scaled = np.mean(mean_absolute_error(y_test_np, y_pred_np, multioutput='raw_values'))
-        mae_percentage = (mae_scaled / np.mean(np.abs(y_test_np))) * 100 if np.mean(np.abs(y_test_np)) != 0 else 0 # MAE en porcentaje
-        print(f"MAE en escala normalizada: {mae_scaled:.4f}")
-        print(f"MAE en porcentaje: {mae_percentage:.2f}%")
+        elif eval_metrics == 'mae':
+            mae_scaled = np.mean(mean_absolute_error(y_test_np, y_pred_np, multioutput='raw_values'))
+            mae_percentage = (mae_scaled / np.mean(np.abs(y_test_np))) * 100 if np.mean(np.abs(y_test_np)) != 0 else 0
+            print(f"MAE en escala normalizada: {mae_scaled:.4f}")
+            print(f"MAE en porcentaje: {mae_percentage:.2f}%")
 
-        print(f"Diferencia entre MSE y MAE = {abs(mse_percentage-mae_percentage):.2f}%")
+        elif eval_metrics == 'mape':
+            epsilon = 1e-10
+            mape = np.mean(np.abs((y_test_np - y_pred_np) / (y_test_np + epsilon))) * 100
+            print(f"MAPE: {mape:.2f}%")
 
-        # Calculate BIC
+        # Calcular BIC
         bic_value = self.calculate_bic(y_test, y_pred)
         print(f"Valor de BIC: {bic_value:.2f}")
 
@@ -172,7 +190,7 @@ class SVRROM(idkROM.Modelo):
 
         print(f"Este es el diccionario que se come el modelo: {self.rom_config}")
 
-        # Create error visualization metrics
+        # Crear visualización de errores
         errors = ErrorMetrics(self, self.model_name, y_test, y_pred)
         errors.create_error_graphs()
 
