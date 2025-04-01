@@ -29,11 +29,9 @@ class idkROM(ABC):
             """Método a sobrescribir en cada subclase"""
             raise NotImplementedError
         
-        @abstractmethod
+        """ @abstractmethod
         def evaluate(self, X_test, y_test, y_pred, eval_metrics):
-            """Método a sobrescribir en cada subclase"""
-            raise NotImplementedError
+            raise NotImplementedError"""
 
-        # search best hyperparams
         
 

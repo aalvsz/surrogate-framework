@@ -1,6 +1,45 @@
 idk_params:
-  n_capas: [model,hyperparams,params,n_layers]
-  n_neuronas: [model,hypeparmas, params, n_neurons]
+
+#neural network
+  n_capas: [model, hyperparams, params, n_layers]
+  n_neuronas: [model, hyperparams, params, n_neurons]
+  activation: [model, hyperparams, params, activation]
+  dropout_rate: [model, hyperparams, params, dropout_rate]
+  optimizer_nn: [model, hyperparams, params, optimizer]
+  lr: [model, hyperparams, params, learning_rate]
+  epochs: [model, hyperparams, params, epochs]
+
+#gaussian process
+  kernel_gp: [model, hyperparams, params, kernel]
+  constant_kernel: [model, hyperparams, params, constant_kernel]
+  matern_nu: [model, hyperparams, params, matern_nu]
+  expsine_periodicity: [model, hyperparams, params, expsine_periodicity]
+  alpha_gp: [model, hyperparams, params, alpha]
+  optimizer_gp: [model, hyperparams, params, optimizer]
+  n_restarts_optimizer: [model, hyperparams, params, n_restarts_optimizer]
+
+#rbf
+  alpha_rbf: [model, hyperparams, params, alpha]
+  kernel_rbf: [model, hyperparams, params, kernel]
+  gamma_rbf: [model, hyperparams, params, gamma]
+  degree_rbf: [model, hyperparams, params, degree]
+
+#response surface
+  degree_poly: [model, hyperparams, params, kernel]
+  interaction_only: [model, hyperparams, params, constant_kernel]
+  include_bias: [model, hyperparams, params, matern_nu]
+  order: [model, hyperparams, params, expsine_periodicity]
+  fit_intercept: [model, hyperparams, params, alpha]
+  positive: [model, hyperparams, params, positive]
+
+#svr
+  kernel_svr: [model, hyperparams, params, kernel]
+  degree_svr: [model, hyperparams, params, degree]
+  gamma_svr: [model, hyperparams, params, gamma]
+  tolerance: [model, hyperparams, params, tolerance]
+  C: [model, hyperparams, params, C]
+  epsilon: [model, hyperparams, params, epsilon]
+
 
 data:
   input: D:\\idkROM\\idkROM\\data\\main_platoHydr_idkFEM_DOE_Results copy_inputs.csv
@@ -11,23 +50,24 @@ preprocess:
   scaler: MinMaxScaler
   validation: single | cross
   test_size: 0.15
-  validation_size: 
+  validation_size:
 
 model:
-#  type: neural_network
-#  hyperparams:
-#    mode: manual
-#    params:
-#      n_iter: 10 # only if mode: best
-#      cv: 5 # only if mode: best
-#
-#      n_layers: 4
-#      n_neurons: 5
-#      activation: Tanh
-#      optimizer: Adam
-#      learning_rate: 0.01
-#      #loss: [mse, mae, mape]
-#      epochs: 1000
+  type: neural_network
+  hyperparams:
+    mode: manual
+    params:
+      n_iter: 10 # only if mode: best
+      cv: 5 # only if mode: best
+
+      n_layers: 2
+      n_neurons: 5
+      activation: Tanh
+      dropout_rate: 0.2
+      optimizer: Adam
+      learning_rate: 0.01
+      #loss: [mse, mae, mape]
+      epochs: 1000
 
 #  type: gaussian_process
 #  hyperparams:
@@ -36,22 +76,28 @@ model:
 #      n_iter: 10 # only if mode: best
 #      cv: 5 # only if mode: best
 #
-#      kernel: RBF 
-#      noise: 0.0001
+#      kernel: RBF
+#      constant_kernel: 2
+#      matern_nu: 1.5 # only if kernel: Matern
+#      expsine_periodicity: 1.0 # only if kernel: ExpSineSquared
+#      alpha: 0.0001
 #      optimizer: fmin_l_bfgs_b
+#      n_restarts_optimizer: 0
 #      #loss: [mse, mae, mape]
 
 
-  type: rbf
-  hyperparams:
-    mode: manual
-    params:
-      n_iter: 10 # only if mode: best
-      cv: 5 # only if mode: best
-
-      gamma: 1.0 
-      #loss: [mse, mae, mape]
-      #metrics: [mae, mse, mape]
+#  type: rbf
+#  hyperparams:
+#    mode: manual
+#    params:
+#      n_iter: 10 # only if mode: best
+#      cv: 5 # only if mode: best
+#      alpha: 1.0 
+#      kernel: linear 
+#      gamma: None 
+#      degree: 3 
+#      #loss: [mse, mae, mape]
+#      #metrics: [mae, mse, mape]
 
 
 #  type: response_surface
@@ -62,6 +108,11 @@ model:
 #      cv: 5 # only if mode: best
 #
 #      degree: 2 
+#      interaction_only: False 
+#      include_bias: True 
+#      order: C 
+#      fit_intercept: True 
+#      positive: False
 #      #loss: [mse, mae, mape]
 
 
@@ -73,6 +124,9 @@ model:
 #      cv: 5 # only if mode: best
 #
 #      kernel: rbf 
+#      degree: 3 
+#      gamma: scale 
+#      tolerance: 1e-3 
 #      C: 1.0
 #      epsilon: 0.1
 #      #loss: [mse, mae, mape]
@@ -80,5 +134,5 @@ model:
 
 evaluate:
   metrics: mse
-  plot: True 
-  save: True
+  plot: true
+  save: true

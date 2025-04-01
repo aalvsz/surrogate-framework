@@ -2,8 +2,8 @@ import os
 import numpy as np
 import pandas as pd
 from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RBF, Matern
-from src.idkrom import idkROM
+from sklearn.gaussian_process.kernels import RBF, Matern, ConstantKernel, ExpSineSquared
+from new_main import idkROM
 from src.visualization.metrics import ErrorMetrics
 import joblib
 
@@ -14,7 +14,10 @@ class GaussianProcessROM(idkROM.Modelo):
         
         # Extraer parámetros de configuración
         self.kernel = rom_config['hyperparams']['kernel']
-        self.noise = rom_config['hyperparams']['noise']
+        self.cst_kernel = rom_config['hyperparams']['constant_kernel']
+        self.matern_nu = rom_config['hyperparams']['matern_nu']
+        self.expsine_periodicity = rom_config['hyperparams']['expsine_periodicity']
+        self.alpha = rom_config['hyperparams']['alpha']
         self.optimizer = rom_config['hyperparams']['optimizer']
         self.random_state = random_state
    
@@ -23,15 +26,17 @@ class GaussianProcessROM(idkROM.Modelo):
         
         # Configurar el kernel
         if self.kernel == "RBF":
-            self.kernel_instance = RBF(length_scale=1.0)
+            self.kernel_instance = RBF(length_scale=1.0) + ConstantKernel(constant_value=self.cst_kernel)
         elif self.kernel == "Matern":
-            self.kernel_instance = Matern(length_scale=1.0, nu=1.5)
+            self.kernel_instance = Matern(length_scale=1.0, nu=self.matern_nu)
+        elif self.kernel == "ExpSineSquared":
+            self.kernel_instance = ExpSineSquared(length_scale=1.0, periodicity=self.expsine_periodicity)
         else:
             raise ValueError(f"Kernel {self.kernel} no soportado")
 
         if rom_config['mode'] != 'best':
             # Crear el GaussianProcessRegressor
-            self.model = GaussianProcessRegressor(kernel=self.kernel_instance, alpha=self.noise, optimizer=self.optimizer, random_state=random_state)
+            self.model = GaussianProcessRegressor(kernel=self.kernel_instance, alpha=self.alpha, optimizer=self.optimizer, random_state=random_state)
 
         # Variables para el reporte (se llenarán durante el entrenamiento)
         self.X_train = None
@@ -81,100 +86,3 @@ class GaussianProcessROM(idkROM.Modelo):
         y_pred, std_dev = self.model.predict(X_test, return_std=True)
         print(f"Standard deviation is {np.mean(std_dev):.4f}")
         return y_pred
-
-
-    def calculate_bic(self, y_true, y_pred):
-        """
-        Calculates the Bayesian Information Criterion (BIC) for Gaussian Process.
-
-        Args:
-            y_true (np.ndarray or pd.DataFrame): True labels for the test data.
-            y_pred (np.ndarray): Predictions made by the model on the test data.
-
-        Returns:
-            float: The BIC value.
-        """
-        n = len(y_true)
-        if n == 0:
-            return np.inf  # Return infinity if no test data
-
-        # Convert y_true to a NumPy array if it's a DataFrame
-        if isinstance(y_true, pd.DataFrame):
-            y_true_np = y_true.values
-        else:
-            y_true_np = y_true
-
-        # Ensure y_true_np has the same shape as y_pred for element-wise comparison
-        if y_true_np.shape != y_pred.shape:
-            raise ValueError(f"Shape mismatch: y_true shape is {y_true_np.shape}, y_pred shape is {y_pred.shape}. They should be the same for BIC calculation.")
-
-        mse = np.mean((y_pred - y_true_np) ** 2)
-        sse = mse * n
-
-        # Número de parámetros del modelo: se considera la longitud de escala del kernel y la varianza del ruido
-        num_params = self.model.kernel_.n_dims + 1  # +1 para la varianza del ruido (alpha)
-
-        bic = n * np.log(sse) + num_params * np.log(n)
-        return bic
-
-    def evaluate(self, X_test: pd.DataFrame, y_test: pd.DataFrame, y_pred: np.ndarray, eval_metrics: str, output_scaler=None) -> float:
-        """
-        Evalúa el modelo con los datos de test y guarda las predicciones.
-        Si se proporciona 'output_scaler', también se calcula el MSE en la escala original.
-
-        Args:
-            X_test (pd.DataFrame): Datos de entrada del conjunto de test.
-            y_test (pd.DataFrame): Datos verdaderos de salida del conjunto de test.
-            y_pred (np.ndarray): Predicciones del modelo.
-            eval_metrics (str): Métrica de evaluación a utilizar.
-            output_scaler (opcional): Scaler usado para transformar los outputs durante el preprocesamiento.
-
-        Returns:
-            float: El MSE en la escala normalizada.
-        """
-
-        print("Verificación de que y_test y y_pred tengan la misma forma:")
-        print("Forma de y_test:", y_test.shape)
-        print("Forma de y_pred:", y_pred.shape)
-
-        # Convertir a numpy arrays
-        y_test_np = y_test.to_numpy()
-        y_pred_np = np.array(y_pred)
-
-        if eval_metrics == 'mse':
-            mse_scaled = np.mean((y_pred_np - y_test_np) ** 2)
-            mse_percentage = (mse_scaled / np.mean(np.abs(y_test_np))) * 100
-            print(f"MSE en escala normalizada: {mse_scaled:.4f}")
-            print(f"MSE en porcentaje: {mse_percentage:.2f}%")
-
-        elif eval_metrics == 'mae':
-            mae_scaled = np.mean(np.abs(y_pred_np - y_test_np))
-            mae_percentage = (mae_scaled / np.mean(np.abs(y_test_np))) * 100
-            print(f"MAE en escala normalizada: {mae_scaled:.4f}")
-            print(f"MAE en porcentaje: {mae_percentage:.2f}%")
-
-        elif eval_metrics == 'mape':
-            epsilon = 1e-10
-            mape = np.mean(np.abs((y_test_np - y_pred_np) / (y_test_np + epsilon))) * 100
-            print(f"MAPE: {mape:.2f}%")
-
-        # Calcular BIC
-        bic_value = self.calculate_bic(y_test, y_pred)
-        print(f"Valor de BIC: {bic_value:.2f}")
-
-        # Calcular la diferencia entre el training loss y el validation loss en porcentaje
-        if hasattr(self, 'train_losses') and hasattr(self, 'val_losses') and len(self.train_losses) > 0 and len(self.val_losses) > 0:
-            last_train_loss = self.train_losses[-1]
-            last_val_loss = self.val_losses[-1]
-            loss_difference_percentage = ((last_train_loss - last_val_loss) / last_train_loss) * 100
-            print(f"Diferencia entre Training Loss y Validation Loss: {loss_difference_percentage:.2f}%")
-
-        print(f"Este es el diccionario que se come el modelo: {self.rom_config}")
-
-        # Create error visualization metrics
-        errors = ErrorMetrics(self, self.model_name, y_test, y_pred)
-        errors.create_error_graphs()
-
-        return mse_scaled
-
-

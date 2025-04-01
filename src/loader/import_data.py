@@ -144,6 +144,68 @@ class DataLoader:
             
             return X_train, y_train, X_val, y_val, X_test, y_test
 
+
+    def actualizar_yaml(self, config_yml_path, dict_hyperparams):
+        """
+        Actualiza un archivo YAML con los valores proporcionados en dict_hyperparams,
+        siguiendo las rutas especificadas en la sección idk_params del YAML.
+        Preserva comentarios y formato original del archivo.
+        
+        Args:
+            config_yml_path (str): Ruta al archivo YAML a modificar
+            dict_hyperparams (dict): Diccionario con los parámetros a actualizar
+            
+        Returns:
+            None: El archivo YAML se modifica directamente
+        """
+        # Verificar que el archivo existe
+        if not os.path.exists(config_yml_path):
+            raise FileNotFoundError(f"El archivo {config_yml_path} no existe")
+        
+        # Cargar el archivo YAML preservando comentarios
+        with open(config_yml_path, 'r', encoding='utf-8') as file:
+            # Usamos ruamel.yaml que preserva comentarios y formato
+            from ruamel.yaml import YAML
+            yaml_parser = YAML()
+            yaml_parser.preserve_quotes = True
+            yaml_parser.indent(mapping=2, sequence=4, offset=2)
+            config = yaml_parser.load(file)
+        
+        # Verificar que existe la sección idk_params
+        if 'idk_params' not in config:
+            raise KeyError("La sección 'idk_params' no existe en el archivo YAML")
+        
+        # Iterar sobre los parámetros a modificar
+        for param, value in dict_hyperparams.items():
+            # Verificar que el parámetro existe en idk_params
+            if param not in config['idk_params']:
+                print(f"Advertencia: El parámetro '{param}' no está definido en idk_params y será ignorado")
+                continue
+            
+            # Obtener la ruta para el parámetro
+            param_path = config['idk_params'][param]
+            
+            # Navegar a través de la ruta en el YAML
+            target = config
+            for i, key in enumerate(param_path):
+                # Verificar que todas las claves existen en el camino
+                if key not in target:
+                    print(f"Advertencia: La clave '{key}' no existe en la ruta {param_path[:i+1]}")
+                    break
+                
+                # Si es el último elemento, actualizamos el valor
+                if i == len(param_path) - 1:
+                    target[key] = value
+                else:
+                    # Si no es el último, seguimos navegando
+                    target = target[key]
+        
+        # Guardar los cambios en el archivo YAML preservando comentarios y formato
+        with open(config_yml_path, 'w', encoding='utf-8') as file:
+            yaml_parser.dump(config, file)
+        
+        print(f"Archivo {config_yml_path} actualizado correctamente preservando comentarios y formato")
+
         
 if __name__ == "__main__":
 
