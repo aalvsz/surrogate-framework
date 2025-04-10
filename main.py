@@ -1,88 +1,51 @@
 import os
-from src.loader.import_data import DataLoader
-from src.pre.preprocessing import Pre
-from src.models.neural_network import NeuralNetworkROM
-from src.models.gaussian_process import GaussianProcessROM
-from src.models.rbf import RBFROM
-from src.models.polynomial_response_surface import PolynomialResponseSurface
-from src.models.svr import SVRROM
+import pickle
+from idkROM.idkROM import idkROM
 
 
-if __name__ == "__main__":
+# OBJETIVO
+# que el usuario no tenga la mano sobre el modelo
 
-    random_state = 41
+random_state = 5
 
-    loader = DataLoader()
-    config_dict = loader.read_yml(os.getcwd() + "/config.yml")
-    print(f"Diccionario de configuracion: {config_dict}")
-    inputs_file_path = config_dict['data inputs']
-    outputs_file_path = config_dict['data outputs']
-    data_source = config_dict['read mode']
-    model_name = config_dict['model type']
-    hyperparams = config_dict['hyperparams']
-    mode = config_dict['mode']
-    eval_metrics = config_dict['eval metrics']
-    default_params = loader.default_params
-
-    if data_source == "raw":
-        ##### CARGAR LOS DATOS
-        inputs_df, outputs_df = loader.load_data(input_path=inputs_file_path, output_path=outputs_file_path, data_source="raw")
-        print(f"Datos cargados.")
-
-        ##### PREPROCESAMIENTO
-        preprocessor = Pre()
-        scaler_type = 'minmax'
-        filter_method = 'isolation_forest'
-        (X_train_normalized, y_train_normalized,
-                X_val_normalized, y_val_normalized,
-                X_test_normalized, y_test_normalized) = preprocessor.pre_process_data(inputs_df, outputs_df, 0.7, 0.15, 0.15, scaler_type, filter_method, random_state)
-        print(f"Datos preprocesados.")
+# en el config.yml tenemos el input data
+# entonces solo con leer el diccionario en el run,
+# se ejecutaran secuencialmente las demas funciones
+# es decir: load(), load.preprocess(), create_model(), evaluate()
 
 
-    else: 
-        # Cargamos los datos preprocesados
-        loader = DataLoader()
-        (X_train_normalized, y_train_normalized,
-        X_val_normalized, y_val_normalized,
-        X_test_normalized, y_test_normalized) = loader.load_data(output_path=outputs_file_path, data_source="pre")
-        print(f"Datos preprocesados cargados.")
+# para optimizar hiperparametros
+NN_dict_hyperparams = {'n_capas': 2, 'n_neuronas': 32, 'activation': 'ReLU',
+                        'dropout_rate': 0.1, 'optimizer_nn': 'Adam', 'lr': 0.01,
+                          'lr_step': 1000, 'lr_decrease_rate': 0.5, 'epochs': 5000,
+                          'batch_size': 64, 'patience': 100, 'cv_folds': 5,
+                            'convergence_threshold': 1e-5}
 
-    rom_config = {
-    'input_dim': X_train_normalized.shape[1],
-    'output_dim': y_train_normalized.shape[1],
-    'hyperparams': hyperparams if mode in ['best', 'manual'] else default_params[model_name],
-    'mode': mode,
-    'model_name': model_name
-    }
+GP_dict_hyperparams = {'kernel_gp': 'RBF'}
 
-    print(f"\nConfiguracion del ROM: {rom_config}")
-    
-    ##### SE CONFIGURA EL MODELO
-    if model_name.lower() == "neural_network":
-        # creamos un modelo de ROM solo con atributos, o sea sin crear una red neuronal
-        model = NeuralNetworkROM(rom_config, random_state=random_state)
-        #best_params = model.search_best_hyperparams(X_train_normalized, y_train_normalized, X_val_normalized, y_val_normalized, iterations=10, cv_folds=5, random_state=random_state)
-        #rom_config['hyperparams'] = best_params	
+PRS_dict_hyperparams = {'degree': '3'}
 
-    elif model_name.lower() == "gaussian_process":
-        model = GaussianProcessROM(rom_config, random_state=random_state)
-    
-    elif model_name.lower() == "rbf":
-        model = RBFROM(rom_config, random_state=random_state)
+RBF_dict_hyperparams = {'alpha': '1.1'}
 
-    elif model_name.lower() == "response_surface":
-        model = PolynomialResponseSurface(rom_config, random_state=random_state)
+SVR_dict_hyperparams = {'tolerance': 1e-4, 'epsilon': 0.3}
 
-    elif model_name.lower() == "svr":
-        model = SVRROM(rom_config, random_state=random_state)
-    
-    ##### ENTRENAMIENTO
-    model.train(X_train_normalized, y_train_normalized, X_val_normalized, y_val_normalized)
+rom_instance = idkROM(random_state)
+rom_instance.idk_run(GP_dict_hyperparams)
 
-    ##### PREDICCIONES
-    y_pred = model.predict(X_test_normalized)
 
-    ##### EVALUACION
-    model.evaluate(X_test_normalized, y_test_normalized, y_pred, eval_metrics)
-    
-        
+
+
+# Guardar el modelo
+# --- Guardar el modelo y el scaler juntos ---
+if hasattr(rom_instance, 'model') and rom_instance.model is not None:
+
+    save_rom_path = os.path.join(os.getcwd(), 'idksim', 'rom.pkl')
+    print(f"Guardando el modelo ROM en: {save_rom_path}")
+    try:
+        with open(save_rom_path, 'wb') as f:
+            pickle.dump(rom_instance.model, f)
+        print("Modelo guardado exitosamente.")
+    except Exception as e:
+        print(f"Error al guardar el modelo: {e}")
+else:
+    print("Error: No se encontró el modelo entrenado en la instancia de idkROM después de la ejecución.")

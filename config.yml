@@ -7,7 +7,13 @@ idk_params:
   dropout_rate: [model, hyperparams, params, dropout_rate]
   optimizer_nn: [model, hyperparams, params, optimizer]
   lr: [model, hyperparams, params, learning_rate]
+  lr_step: [model, hyperparams, params, lr_step]
+  lr_decrease_rate: [model, hyperparams, params, lr_decrease_rate]
   epochs: [model, hyperparams, params, epochs]
+  batch_size: [model, hyperparams, params, batch_size]
+  patience: [model, hyperparams, params, patience]
+  cv_folds: [model, hyperparams, params, cv_folds]
+  convergence_threshold: [model, hyperparams, params, convergence_threshold]
 
 #gaussian process
   kernel_gp: [model, hyperparams, params, kernel]
@@ -42,48 +48,54 @@ idk_params:
 
 
 data:
-  input: D:\\idkROM\\idkROM\\data\\main_platoHydr_idkFEM_DOE_Results copy_inputs.csv
-  output: D:\\idkROM\\idkROM\\data\\main_platoHydr_idkFEM_DOE_Results copy_outputs.csv
+  input: D:\\idk_framework\\idkROM\\data\\main_platoHydr_idkFEM_DOE_Results copy_inputs.csv
+  output: D:\\idk_framework\\idkROM\\data\\main_platoHydr_idkFEM_DOE_Results copy_outputs.csv
 
 preprocess:
   read mode: raw
-  scaler: MinMaxScaler
-  validation: single | cross
-  test_size: 0.15
-  validation_size:
+  validation mode: cross # single to use X_val and y_val, cross for cross-validation
+  imputer: simple # simple, missing indicator or knn
+  scaler: minmax # minmax, standard or robust
+  filter method: isolation forest # isolation forest, lof (local outlier factor) or iqr (interquartile range)
+  test size: 0.15
+  validation size: 0
 
 model:
-  type: neural_network
+#  type: neural_network
+#  hyperparams:
+#    mode: manual
+#    params:
+#      n_layers: 2
+#      n_neurons: 32
+#      activation: ReLU
+#      dropout_rate: 0.1
+#      optimizer: Adam
+#      learning_rate: 0.01
+#      lr_step: 1000
+#      lr_decrease_rate: 0.5
+#      #loss: [mse, mae, mape]
+#      epochs: 5000
+#      batch_size: 64
+#      patience: 100
+#      cv_folds: 5
+#      convergence_threshold: 1e-05
+
+
+  type: gaussian_process
   hyperparams:
     mode: manual
     params:
       n_iter: 10 # only if mode: best
       cv: 5 # only if mode: best
 
-      n_layers: 2
-      n_neurons: 5
-      activation: Tanh
-      dropout_rate: 0.2
-      optimizer: Adam
-      learning_rate: 0.01
+      kernel_gp: RBF
+      constant_kernel: 2
+      matern_nu: 1.5 # only if kernel: Matern
+      expsine_periodicity: 1.0 # only if kernel: ExpSineSquared
+      alpha_gp: 0.0001
+      optimizer_gp: fmin_l_bfgs_b
+      n_restarts_optimizer: 0
       #loss: [mse, mae, mape]
-      epochs: 1000
-
-#  type: gaussian_process
-#  hyperparams:
-#    mode: manual
-#    params:
-#      n_iter: 10 # only if mode: best
-#      cv: 5 # only if mode: best
-#
-#      kernel: RBF
-#      constant_kernel: 2
-#      matern_nu: 1.5 # only if kernel: Matern
-#      expsine_periodicity: 1.0 # only if kernel: ExpSineSquared
-#      alpha: 0.0001
-#      optimizer: fmin_l_bfgs_b
-#      n_restarts_optimizer: 0
-#      #loss: [mse, mae, mape]
 
 
 #  type: rbf
@@ -92,10 +104,10 @@ model:
 #    params:
 #      n_iter: 10 # only if mode: best
 #      cv: 5 # only if mode: best
-#      alpha: 1.0 
-#      kernel: linear 
-#      gamma: None 
-#      degree: 3 
+#      alpha_rbf: 1.0
+#      kernel_rbf: linear
+#      gamma_rbf: None
+#      degree_rbf: 3
 #      #loss: [mse, mae, mape]
 #      #metrics: [mae, mse, mape]
 
@@ -107,14 +119,13 @@ model:
 #      n_iter: 10 # only if mode: best
 #      cv: 5 # only if mode: best
 #
-#      degree: 2 
-#      interaction_only: False 
-#      include_bias: True 
-#      order: C 
-#      fit_intercept: True 
-#      positive: False
+#      degree_rs: 2
+#      interaction_only: false
+#      include_bias: true
+#      order: C
+#      fit_intercept: true
+#      positive: false
 #      #loss: [mse, mae, mape]
-
 
 #  type: svr
 #  hyperparams:
@@ -123,12 +134,12 @@ model:
 #      n_iter: 10 # only if mode: best
 #      cv: 5 # only if mode: best
 #
-#      kernel: rbf 
-#      degree: 3 
-#      gamma: scale 
-#      tolerance: 1e-3 
+#      kernel_svr: rbf
+#      degree_svr: 3
+#      gamma_svr: scale
+#      tolerance: 0.0001
 #      C: 1.0
-#      epsilon: 0.1
+#      epsilon: 0.3
 #      #loss: [mse, mae, mape]
 
 

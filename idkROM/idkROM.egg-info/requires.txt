@@ -1,0 +1,12 @@
+numpy
+pandas
+pyyaml
+plotly>=6.0.0
+joblib
+plotly-express>=0.4.1
+pymoo
+scipy
+
+[dev]
+pytest
+flake8

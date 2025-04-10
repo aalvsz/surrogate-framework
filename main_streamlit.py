@@ -1,141 +1,90 @@
-import sys
-import io
 import os
+import pickle
 import streamlit as st
-from src.loader.import_data import DataLoader
-from src.pre.preprocessing import Pre
-from src.models.neural_network import NeuralNetworkROM
-from src.models.gaussian_process import GaussianProcessROM
-from src.models.rbf import RBFROM
-from src.models.polynomial_response_surface import PolynomialResponseSurface
-from src.models.svr import SVRROM
+from idkROM.idkROM import idkROM
+import io
+import sys
+from contextlib import redirect_stdout
 
-# Función para capturar los prints de evaluate
-def capture_output(func, *args, **kwargs):
-    # Redirigir el print a un StringIO
-    captured_output = io.StringIO()
-    sys.stdout = captured_output
-    
-    # Ejecutar la función
-    func(*args, **kwargs)
-    
-    # Restaurar la salida estándar
-    sys.stdout = sys.__stdout__
-    
-    # Devolver el contenido capturado
-    return captured_output.getvalue()
+# --- CONFIGURACIONES INICIALES ---
+st.set_page_config(page_title="idkROM App", layout="wide")
+random_state = 5
 
-# Función para cargar y procesar los datos
-def load_and_process_data():
-    loader = DataLoader()
-    config_dict = loader.read_yml(os.getcwd() + "/config.yml")
-    inputs_file_path = config_dict['data inputs']
-    outputs_file_path = config_dict['data outputs']
-    data_source = config_dict['read mode']
-    
-    if data_source == "raw":
-        inputs_df, outputs_df = loader.load_data(input_path=inputs_file_path, output_path=outputs_file_path, data_source="raw")
-        preprocessor = Pre()
-        scaler_type = 'minmax'
-        filter_method = 'isolation_forest'
-        X_train_normalized, y_train_normalized, X_val_normalized, y_val_normalized, X_test_normalized, y_test_normalized = preprocessor.pre_process_data(
-            inputs_df, outputs_df, 0.7, 0.15, 0.15, scaler_type, filter_method, random_state=41)
-        return X_train_normalized, y_train_normalized, X_val_normalized, y_val_normalized, X_test_normalized, y_test_normalized, config_dict
-    else:
-        (X_train_normalized, y_train_normalized, X_val_normalized, y_val_normalized, X_test_normalized, y_test_normalized) = loader.load_data(
-            output_path=outputs_file_path, data_source="pre")
-        return X_train_normalized, y_train_normalized, X_val_normalized, y_val_normalized, X_test_normalized, y_test_normalized, config_dict
+# Diccionarios de hiperparámetros
+model_configs = {
+    "Neural Network": {'n_capas': 2, 'n_neuronas': 32, 'activation': 'ReLU',
+                       'dropout_rate': 0.1, 'optimizer_nn': 'Adam', 'lr': 0.01,
+                       'lr_step': 1000, 'lr_decrease_rate': 0.5, 'epochs': 5000,
+                       'batch_size': 64, 'patience': 100, 'cv_folds': 5,
+                       'convergence_threshold': 1e-5},
+    "Gaussian Process": {'kernel_gp': 'RBF'},
+    "Polynomial Response Surface": {'degree': '3'},
+    "Radial Basis Function": {'alpha': '1.1'},
+    "Support Vector Regression": {'tolerance': 1e-4, 'epsilon': 0.3}
+}
 
-# Función para configurar el modelo
-def configure_model(model_name, rom_config):
-    if model_name.lower() == "neural_network":
-        model = NeuralNetworkROM(rom_config, random_state=41)
-    elif model_name.lower() == "gaussian_process":
-        model = GaussianProcessROM(rom_config, random_state=41)
-    elif model_name.lower() == "rbf":
-        model = RBFROM(rom_config, random_state=41)
-    elif model_name.lower() == "response_surface":
-        model = PolynomialResponseSurface(rom_config, random_state=41)
-    elif model_name.lower() == "svr":
-        model = SVRROM(rom_config, random_state=41)
-    return model
+# --- STREAMLIT TABS ---
+tab1, tab2, tab3 = st.tabs(["Entrenamiento", "Resultados", "Consola"])
 
-# Función para entrenar y predecir el modelo
-def train_and_predict(model, X_train_normalized, y_train_normalized, X_val_normalized, y_val_normalized, X_test_normalized):
-    model.train(X_train_normalized, y_train_normalized, X_val_normalized, y_val_normalized)
-    y_pred = model.predict(X_test_normalized)
-    return y_pred
-
-# Configuración de Streamlit
-st.title('ROM Model Training and Evaluation')
-
-# Pestañas para navegar
-tab1, tab2, tab3 = st.tabs(["Ejecutar Modelo", "Hiperparámetros y Modelo", "Métricas y Gráfico"])
-
+# --- TAB 1: Entrenamiento ---
 with tab1:
-    st.header("Ejecutar Modelo")
-    
-    # Cargar y procesar datos
-    X_train_normalized, y_train_normalized, X_val_normalized, y_val_normalized, X_test_normalized, y_test_normalized, config_dict = load_and_process_data()
-    
-    model_name = config_dict['model type']
-    hyperparams = config_dict['hyperparams']
-    mode = config_dict['mode']
-    eval_metrics = config_dict['eval metrics']
-    default_params = DataLoader().default_params
-    
-    rom_config = {
-        'input_dim': X_train_normalized.shape[1],
-        'output_dim': y_train_normalized.shape[1],
-        'hyperparams': hyperparams if mode in ['best', 'manual'] else default_params[model_name],
-        'mode': mode,
-        'model_name': model_name
-    }
+    st.title("Entrenamiento de Modelos ROM")
 
-    # Configurar el modelo
-    model = configure_model(model_name, rom_config)
-    
-    # Mostrar los mensajes que se imprimen en la consola durante el entrenamiento
-    st.write("Configurando el modelo...")
-    st.write(f"Modelo elegido: {model_name}")
-    st.write(f"Configuración: {rom_config}")
-    
-    # Ejecutar el entrenamiento y hacer predicciones
-    if st.button('Entrenar y Predecir'):
-        st.write("Entrenando el modelo...")
-        y_pred = train_and_predict(model, X_train_normalized, y_train_normalized, X_val_normalized, y_val_normalized, X_test_normalized)
-        st.session_state.y_pred = y_pred  # Guardar las predicciones en el estado de la sesión
-        st.write("Predicciones realizadas.")
+    model_choice = st.selectbox("Selecciona el modelo ROM:", list(model_configs.keys()))
 
+    if st.button("Entrenar modelo"):
+        # Capturar stdout (prints)
+        f = io.StringIO()
+        with redirect_stdout(f):
+            rom_instance = idkROM(random_state)
+            rom_instance.idk_run(model_configs[model_choice])
+
+            if hasattr(rom_instance, 'model') and rom_instance.model is not None:
+                save_rom_path = os.path.join(os.getcwd(), 'idksim', 'rom.pkl')
+                print(f"Guardando el modelo ROM en: {save_rom_path}")
+                try:
+                    with open(save_rom_path, 'wb') as f_model:
+                        pickle.dump(rom_instance.model, f_model)
+                    print("Modelo guardado exitosamente.")
+                    st.session_state.model_path = save_rom_path
+                except Exception as e:
+                    print(f"Error al guardar el modelo: {e}")
+            else:
+                print("Error: No se encontró el modelo entrenado.")
+
+        # Guardar consola y modelo actual
+        st.session_state.output_log = f.getvalue()
+        st.session_state.last_model_name = model_choice
+        st.success("Entrenamiento finalizado. Consulta los resultados y consola.")
+
+# --- TAB 2: Resultados ---
 with tab2:
-    st.header("Hiperparámetros y Modelo")
-    
-    # Mostrar hiperparámetros y el modelo seleccionado
-    st.write(f"Modelo elegido: {model_name}")
-    st.write("Hiperparámetros:")
-    st.json(config_dict['hyperparams'])
+    st.title("Resultados del Modelo")
 
-with tab3:
-    st.header("Métricas y Gráfico")
-    
-    # Verificar si se ha generado y_pred
-    if 'y_pred' in st.session_state:
-        y_pred = st.session_state.y_pred
-        st.write("Evaluando el modelo...")
-        
-        # Capturar los prints de la función evaluate y mostrarlo en Streamlit
-        eval_output = capture_output(model.evaluate, X_test_normalized, y_test_normalized, y_pred, eval_metrics)
-        
-        # Mostrar los prints capturados
-        st.text(eval_output)
-        
-        # Ruta del gráfico generado por evaluate()
-        image_path = os.path.join(os.getcwd(), 'images', f'error_metrics_{model_name}.png')
-        
-        # Verificar si el archivo existe
+    if "last_model_name" in st.session_state:
+        model_key = st.session_state.last_model_name
+        image_filename = f"error_metrics_{model_key.replace(' ', '_')}.png"
+        image_path = os.path.join("images", image_filename)
+
         if os.path.exists(image_path):
-            st.image(image_path, caption=f"Gráfico de Error Metrics para {model_name}", use_column_width=True)
+            st.image(image_path, caption=f"Métricas de error para {model_key}", use_column_width=True)
         else:
-            st.write("No se encontró el gráfico de error metrics.")
+            st.warning(f"No se encontró la imagen: {image_filename}")
     else:
-        st.write("Primero entrena el modelo para generar predicciones.")
+        st.info("Entrena un modelo primero para ver resultados.")
+
+    if "model_path" in st.session_state and os.path.exists(st.session_state.model_path):
+        with open(st.session_state.model_path, "rb") as f:
+            st.download_button("📥 Descargar modelo ROM", f, file_name="rom.pkl")
+
+# --- TAB 3: Consola ---
+with tab3:
+    st.title("Salida de Consola")
+
+    if "output_log" in st.session_state:
+        st.text_area("Log de ejecución:", st.session_state.output_log, height=400)
+    else:
+        st.info("Ejecuta un entrenamiento para ver la consola.")
+
+
+# streamlit run main_streamlit.py
