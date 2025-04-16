@@ -53,30 +53,30 @@ data:
 
 preprocess:
   read mode: raw
-  validation mode: single # single to use X_val and y_val, cross for cross-validation
+  validation mode: cross # single to use X_val and y_val, cross for cross-validation
   imputer: simple # simple, missing indicator or knn
   scaler: minmax # minmax, standard or robust
   filter method: isolation forest # isolation forest, lof (local outlier factor) or iqr (interquartile range)
   test size: 0.15
-  validation size: 0.10
+  validation size: 0
 
 model:
   type: neural_network
   hyperparams:
     mode: manual
     params:
-      n_layers: 10.0
-      n_neurons: 4.0
+      n_layers: 2
+      n_neurons: 32
       activation: ReLU
       dropout_rate: 0.1
       optimizer: Adam
-      learning_rate: 0.1
+      learning_rate: 0.01
       lr_step: 1000
       lr_decrease_rate: 0.5
       #loss: [mse, mae, mape]
-      epochs: 500.0
+      epochs: 5000
       batch_size: 64
-      patience: 500.0
+      patience: 100
       cv_folds: 5
       convergence_threshold: 1e-05
 

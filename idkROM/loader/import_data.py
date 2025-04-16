@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import yaml
+from ruamel.yaml import YAML
 
 class DataLoader:
     """
@@ -178,7 +179,6 @@ class DataLoader:
         # Cargar el archivo YAML preservando comentarios
         with open(config_yml_path, 'r', encoding='utf-8') as file:
             # Usamos ruamel.yaml que preserva comentarios y formato
-            from ruamel.yaml import YAML
             yaml_parser = YAML()
             yaml_parser.preserve_quotes = True
             yaml_parser.indent(mapping=2, sequence=4, offset=2)

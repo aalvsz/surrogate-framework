@@ -8,8 +8,12 @@ from idkROM.visualization.metrics import ErrorMetrics
 
 
 class idkROM(ABC):
-    
-    def __init__(self, random_state=None, config_yml_path="config.yml"):
+
+    def __init__(self, random_state=None, config_yml_path=None):
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        config_yml_path = os.path.join(base_path, "config.yml")
+        print(f"Este es el path del yaml {config_yml_path}.")
+        self.config_yml_path = config_yml_path
         self.random_state = random_state
         self.config_yml_path = config_yml_path
         self.config_dict = None
@@ -151,6 +155,7 @@ class idkROM(ABC):
             mse_percentage = (mse_scaled / np.mean(np.abs(y_test_np))) * 100  # MSE en porcentaje
             print(f"MSE en escala normalizada: {mse_scaled:.4f}")
             print(f"MSE en porcentaje: {mse_percentage:.2f}%")
+            metric = mse_scaled
 
         elif rom_config['eval_metrics'] == 'mae':
             # Calcular MAE normalizado
@@ -158,6 +163,7 @@ class idkROM(ABC):
             mae_percentage = (mae_scaled / np.mean(np.abs(y_test_np))) * 100  # MAE en porcentaje
             print(f"MAE en escala normalizada: {mae_scaled:.4f}")
             print(f"MAE en porcentaje: {mae_percentage:.2f}%")
+            metric = mae_scaled
 
         elif rom_config['eval_metrics'] == 'mape':
             # Calcular Mean Absolute Percentage Error (MAPE)
@@ -165,6 +171,7 @@ class idkROM(ABC):
             epsilon = 1e-10
             mape = np.mean(np.abs((y_test_np - y_pred_np) / (y_test_np + epsilon))) * 100
             print(f"MAPE: {mape:.2f}%")
+            metric = mape
 
         # Create error visualization metrics
         errors = ErrorMetrics(self, rom_config, y_test, y_pred)
@@ -186,22 +193,21 @@ class idkROM(ABC):
             print(f"MAE en escala original: {mae_original}")
             print(f"MAE en escala original (porcentaje): {mae_original_percentage:.2f}%")"""
 
-        print(f"Este es el diccionario que se come el modelo: {rom_config}")
-        
-        
-        return 0
+        # print(f"Este es el diccionario que se come el modelo: {rom_config}")
+        metric = {'metric': metric}
+        return metric
 
 
     def run(self, config_yml): # runear un modelo para obtener un simple predict
         loader = DataLoader()
         rom_config, data_after_split = self.load(loader, config_yml)
         y_pred, self.model = self.create_model(rom_config, data_after_split)
-        self.evaluate(data_after_split[3], y_pred, rom_config) # usamos la funcion evaluate de aqui, no la del modelo
-        return 0
+        metric = self.evaluate(data_after_split[3], y_pred, rom_config) # usamos la funcion evaluate de aqui, no la del modelo
+        return metric
 
 
     def idk_run(self, dict_hyperparams): # runear un modelo con parametros arbitrarios
         loader = DataLoader()
         loader.actualizar_yaml(self.config_yml_path, dict_hyperparams) # actualizar el config.yml con los parametros de dict_hyperparams
-        self.run(self.config_yml_path)
-        return self.eval_metrics
+        metric = self.run(self.config_yml_path)
+        return metric
