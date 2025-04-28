@@ -5,7 +5,7 @@ import pandas as pd
 from sklearn.model_selection import KFold
 from torch.optim.lr_scheduler import StepLR
 import torch.optim as optim
-from idkROM.idkROM import idkROM
+from idkrom.model import idkROM
 
 class NeuralNetworkROM(idkROM.Modelo):
     """

@@ -1,6 +1,6 @@
 import os
 import pickle
-from idkROM.idkROM import idkROM
+from idkrom.model import idkROM
 from contextlib import redirect_stdout
 
 # OBJETIVO

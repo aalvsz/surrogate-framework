@@ -1,7 +1,7 @@
 import os
 import pickle
 import streamlit as st
-from idkROM.idkROM import idkROM
+from idkrom.model import idkROM
 import io
 import sys
 from contextlib import redirect_stdout

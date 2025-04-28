@@ -5,7 +5,7 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, Matern, ConstantKernel, ExpSineSquared
 from sklearn.model_selection import KFold
 import joblib
-from idkROM.idkROM import idkROM
+from idkrom.model import idkROM
 
 class GaussianProcessROM(idkROM.Modelo):
 

@@ -1,5 +1,5 @@
 from sklearn.svm import SVR
-from idkROM.idkROM import idkROM
+from idkrom.model import idkROM
 import os
 import joblib
 import pandas as pd
