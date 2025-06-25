@@ -110,7 +110,3 @@ wcwidth==0.2.13
 wordcloud==1.9.4
 wrapt==1.17.2
 ydata-profiling==4.16.1
-
-[dev]
-pytest
-flake8

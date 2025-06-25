@@ -1,5 +1,15 @@
 idk_params:
 
+  input_data: [data, input]
+  output_data: [data, output]
+  data_source: [preprocess, read mode]
+  validation_mode: [preprocess, validation mode]
+  imputer: [preprocess, imputer]
+  scaler: [preprocess, scaler]
+  filter_method: [preprocess, filter method]
+  test_size: [preprocess, test size]
+  validation_size: [preprocess, validation size]
+
 #neural network
   n_capas: [model, hyperparams, params, n_layers]
   n_neuronas: [model, hyperparams, params, n_neurons]
@@ -48,40 +58,44 @@ idk_params:
 
 
 data:
-  input: D:\\idk_framework\\idkROM\\data\\main_platoHydr_idkFEM_DOE_Results copy_inputs.csv
-  output: D:\\idk_framework\\idkROM\\data\\main_platoHydr_idkFEM_DOE_Results copy_outputs.csv
+  input: C:\Users\aalvarezsanz\OneDrive - DanobatGroup\Documentos\idk_framework\DOE_datos\post\inputs.csv
+  output: C:\Users\aalvarezsanz\OneDrive - DanobatGroup\Documentos\idk_framework\DOE_datos\post\outputs_filtrados_2.csv
 
 preprocess:
   read mode: raw
+  preprocessed data path: None
   validation mode: single # single to use X_val and y_val, cross for cross-validation
   imputer: simple # simple, missing indicator or knn
   scaler: minmax # minmax, standard or robust
+  scaler path: results
   filter method: isolation forest # isolation forest, lof (local outlier factor) or iqr (interquartile range)
-  test size: 0.15
+  test size: 0.10
   validation size: 0.10
 
 model:
   type: neural_network
+  discrete inputs: [N_trans]
   hyperparams:
     mode: manual
     params:
-      n_layers: 10.0
-      n_neurons: 4.0
+      n_layers: 2
+      n_neurons: 128
       activation: ReLU
       dropout_rate: 0.1
       optimizer: Adam
-      learning_rate: 0.1
-      lr_step: 1000
+      learning_rate: 0.001
+      lr_step: 200
       lr_decrease_rate: 0.5
       #loss: [mse, mae, mape]
-      epochs: 500.0
+      epochs: 1000
       batch_size: 64
-      patience: 500.0
+      patience: 100
       cv_folds: 5
-      convergence_threshold: 1e-05
+      convergence_threshold: 1e-09
 
 
 #  type: gaussian_process
+#  discrete inputs: [N_trans]
 #  hyperparams:
 #    mode: manual
 #    params:

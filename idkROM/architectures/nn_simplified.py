@@ -1,8 +1,10 @@
 import os
 import torch
+import joblib
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import KFold
+from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler
 from torch.optim.lr_scheduler import StepLR
 import torch.optim as optim
 from idkrom.model import idkROM
@@ -44,6 +46,7 @@ class NeuralNetworkROM(idkROM.Modelo):
         try:
             self.input_dim = int(rom_config['input_dim'])
             self.output_dim = int(rom_config['output_dim'])
+            self.output_folder = rom_config['output_folder']
             hyperparams = rom_config['hyperparams'] # Alias para hiperparámetros
             self.hidden_layers = int(hyperparams['n_layers'])
             self.neurons_per_layer = int(hyperparams['n_neurons'])
@@ -116,22 +119,23 @@ class NeuralNetworkROM(idkROM.Modelo):
             return activations[self.activation_function_name.lower()]
         except KeyError:
             raise ValueError(f"Función de activación desconocida: {self.activation_function_name}")
-
+    
 
     def _crear_red_neuronal(self):
         """
         Construye la red neuronal feedforward basada en los parámetros de la instancia.
+        La última capa usa Softplus para que la salida sea siempre positiva.
         """
         layers = []
         current_dim = self.input_dim
-        actual_neurons = max(1, self.neurons_per_layer) # Asegura al menos 1 neurona
+        actual_neurons = max(1, self.neurons_per_layer)
 
-        # Capa de entrada a primera oculta (o a salida si no hay ocultas)
-        target_neurons = actual_neurons if self.hidden_layers > 0 else self.output_dim
-        layers.append(torch.nn.Linear(current_dim, target_neurons))
-        layers.append(self._get_activation_function())
-        layers.append(torch.nn.Dropout(self.dropout))
-        current_dim = target_neurons
+        # Entrada -> primera oculta
+        if self.hidden_layers > 0:
+            layers.append(torch.nn.Linear(current_dim, actual_neurons))
+            layers.append(self._get_activation_function())
+            layers.append(torch.nn.Dropout(self.dropout))
+            current_dim = actual_neurons
 
         # Capas ocultas intermedias
         for _ in range(self.hidden_layers - 1):
@@ -140,23 +144,14 @@ class NeuralNetworkROM(idkROM.Modelo):
             layers.append(torch.nn.Dropout(self.dropout))
             current_dim = actual_neurons
 
-        # Última capa oculta a capa de salida (si hubo capas ocultas)
-        if self.hidden_layers > 0:
-             layers.append(torch.nn.Linear(current_dim, self.output_dim))
-        # Si no hubo capas ocultas, la conexión entrada->salida ya se hizo.
+        # Capa de salida
+        layers.append(torch.nn.Linear(current_dim, self.output_dim))
 
-        # Considera no poner activación ni dropout justo antes de la salida para regresión.
-        # Si la capa Linear(..., self.output_dim) no fue la última añadida (porque
-        # no hubo capas ocultas), la añadimos ahora sin activación/dropout final.
-        if not isinstance(layers[-1], torch.nn.Linear):
-             # Quita la activación y dropout anteriores si existen antes de añadir la salida
-             if isinstance(layers[-1], torch.nn.Dropout): layers.pop()
-             if hasattr(layers[-1], 'inplace'): layers.pop() # Quita activación
-             # Asegura que la última dimensión de conexión sea correcta
-             last_linear_layer_output_dim = layers[-1].out_features
-             layers.append(torch.nn.Linear(last_linear_layer_output_dim, self.output_dim))
+        # Activación final que fuerza valores ≥ 0
+        layers.append(torch.nn.ReLU())
 
         return torch.nn.Sequential(*layers)
+
 
 
     def _train_epoch(self, model, optimizer, X_tensor, y_tensor):
@@ -199,7 +194,7 @@ class NeuralNetworkROM(idkROM.Modelo):
         return total_loss / total_examples
 
 
-    def train(self, X_train, y_train, X_val=None, y_val=None, validation_mode='cross'):
+    def train(self, X_train, y_train, X_val=None, y_val=None, validation_mode='cross', save_interval=10):
         """
         Entrena la red neuronal.
 
@@ -400,23 +395,16 @@ class NeuralNetworkROM(idkROM.Modelo):
             if abs(new_lr - current_lr_before_step) > 1e-9: # Tolerancia numérica
                 print(f"  Learning rate actualizado a {new_lr:.2e} en epoch {epoch+1}")
 
-        # --- Guardado del Modelo Final ---
-        output_folder = os.path.join(os.getcwd(), 'results', self.model_name)
-        os.makedirs(output_folder, exist_ok=True)
-        # Guarda el estado del *último* modelo
-        final_model_path = os.path.join(output_folder, f'final_{self.model_name}_model.pth')
-        torch.save(self.nn.state_dict(), final_model_path)
-        print(f"\nModelo final (última época) guardado en: {final_model_path}")
-        # Informar si se guardó un mejor modelo (si se descomentó la sección)
-        # if 'best_model_path' in locals() and os.path.exists(best_model_path):
-        #    print(f"Mejor modelo (según validación) guardado en: {best_model_path}")
-
         final_lr = self.optimizer.param_groups[0]['lr']
         print(f"El entrenamiento finalizó después de {last_epoch} épocas.")
         print(f"Learning rate final: {final_lr:.2e}.")
         if not perform_cv and best_final_val_loss != float('inf'):
             print(f"Mejor loss de validación alcanzado: {best_final_val_loss:.6f}")
 
+        
+        var_y = y_train.var(axis=0)  # Series con varianza por columna
+        print("Varianza por columna:\n", var_y)
+        
 
     def predict(self, X_test) -> np.ndarray:
         """
@@ -479,34 +467,56 @@ class NeuralNetworkROM(idkROM.Modelo):
         else:
             print("Advertencia: No se pudo verificar el número de variables de X_train, 'X_train' no está definido o no tiene atributo 'columns'.")
         
-        # Convertir el diccionario de entrada a un arreglo de NumPy en forma de batch (1, n_features)
-        X = np.array([list(X_params_dict.values())])
-        
-        # Realizar la predicción utilizando la función predict
-        y_pred = self.predict(X)
-        
-        # Aplanar la salida para trabajar con un array 1D si es necesario
-        if y_pred.ndim > 1:
-            # Si y_pred es 2D y tiene una sola fila, se aplana
-            y_pred_flat = y_pred.flatten() if y_pred.shape[0] == 1 else y_pred[0]
-        else:
-            y_pred_flat = y_pred
 
+        # 1) Crea el array de entrada
+        X = np.array([[X_params_dict[col] for col in self.X_train.columns]], dtype=float)
+
+
+        # Separar: primeras 15 variables (numéricas) y la última (N_trans)
+        X_numeric = X[:, :-1]   # (1, 15)
+        X_discrete = X[:, -1:]  # (1, 1)
+
+        # 1bis) ESCALAR INPUTS CON EL SCALER DEL ENTRENAMIENTO
+        input_scaler = joblib.load(os.path.join(self.output_folder, 'input_scaler.pkl'))
+        X_scaled_numeric = input_scaler.transform(X_numeric)  # Aquí sí escalás la entrada
+        X_scaled_full = np.concatenate([X_scaled_numeric, X_discrete], axis=1)  # (1, 16)
+
+        # 2) Predice (salida escalada)
+        y_pred_scaled = self.predict(X_scaled_full)  # ndarray shape (1, n_outputs) o (n_outputs,)
+        
         # Verificar que el número de resultados coincide con el número de columnas de y_train
         if hasattr(self, "y_train") and hasattr(self.y_train, "columns"):
             expected_n_results = len(self.y_train.columns)
-            if y_pred_flat.size != expected_n_results:
-                raise ValueError("El número de resultados predichos ({}) no coincide con el número de columnas en y_train ({}).".format(y_pred_flat.size, expected_n_results))
+            if y_pred_scaled.size != expected_n_results:
+                raise ValueError("El número de resultados predichos ({}) no coincide con el número de columnas en y_train ({}).".format(y_pred_scaled.size, expected_n_results))
             # Obtener los nombres de las columnas a utilizar como llaves
             target_keys = list(self.y_train.columns)
         else:
             print("Advertencia: No se pudo obtener las columnas de y_train, se usarán llaves genéricas.")
-            target_keys = [f"result{i+1}" for i in range(y_pred_flat.size)]
-        
+            target_keys = [f"result{i+1}" for i in range(y_pred_scaled.size)]
+
+        # Aplanar la salida para trabajar con un array 1D si es necesario
+        if y_pred_scaled.ndim > 1:
+            # Si y_pred es 2D y tiene una sola fila, se aplana
+            y_pred_flat = y_pred_scaled.flatten() if y_pred_scaled.shape[0] == 1 else y_pred_scaled[0]
+        else:
+            y_pred_flat = y_pred_scaled
+
+
+        # 3) Desescala si tienes scaler
+        #if hasattr(self, 'output_scaler') and self.output_scaler is not None:
+        output_scaler = joblib.load(os.path.join(self.output_folder, 'output_scaler.pkl'))
+
+        # Asegúrate de que sea 2D
+        y_in = y_pred_flat.reshape(1, -1) if y_pred_flat.ndim == 1 else y_pred_flat
+        y_pred_orig = output_scaler.inverse_transform(y_in)[0]
+        #else:
+        #    y_pred_orig = y_pred_flat
+
+        # 4) Mapear a dict con nombres de columnas
         # Construir el diccionario de resultados utilizando los nombres de columnas como llaves
-        results = {}
-        for key, value in zip(target_keys, y_pred_flat):
-            results[key] = value
+
+        keys = list(self.y_train.columns) if hasattr(self, 'y_train') else [f"out{i}" for i in range(len(y_pred_orig))]
+        results = {k: float(v) for k, v in zip(keys, y_pred_orig)}
 
         return results
-

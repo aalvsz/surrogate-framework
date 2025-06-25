@@ -197,18 +197,45 @@ class ErrorMetrics:
         plt.grid(True)
 
         # 4. Training and Validation Loss Curves (Abajo, Derecha - solo para NeuralNetworkROM)
-        if hasattr(self.model, 'train_losses') and hasattr(self.model, 'val_losses'):
+        if hasattr(self.model.model, 'train_losses') and hasattr(self.model.model, 'val_losses'):
             plt.subplot(2, 2, 4)
-            self.epoch = range(1, len(self.model.train_losses) + 1)
-            plt.plot(self.epoch, self.model.train_losses, label='Pérdida de Entrenamiento')
-            plt.plot(self.epoch, self.model.val_losses, label='Pérdida de Validación')
+            self.epoch = range(1, len(self.model.model.train_losses) + 1)
+            plt.plot(self.epoch, self.model.model.train_losses, label='Pérdida de Entrenamiento')
+            plt.plot(self.epoch, self.model.model.val_losses, label='Pérdida de Validación')
             plt.xlabel("Épocas")
             plt.ylabel("Pérdida")
             plt.title("Curvas de Pérdida de Entrenamiento y Validación")
             plt.legend()
             plt.grid(True)
 
+
         plt.tight_layout()
-        plt.savefig(os.path.join(os.getcwd(), 'images', f"error_metrics_{self.rom_config['model_name']}.png"))
+        plt.savefig(os.path.join(self.rom_config['output_folder'], f"error_metrics_{self.rom_config['model_name']}.png"))
         plt.close()
+
+        # Calcula los errores
+        errors = self.y_pred - self.y_test.values
+        eps = 1e-10
+        error_rel_percent = (self.y_pred - self.y_test.values) / (self.y_test.values + eps) * 100
+
+        num_outputs = self.y_test.shape[1]
+        cols = self.y_test.columns
+
+        # Generar una figura por cada variable
+        for i in range(num_outputs):
+            fig, ax = plt.subplots(figsize=(6, 5))
+
+            # Gráfico: Error absoluto vs. Predicción
+            ax.scatter(self.y_pred[:, i], errors[:, i], alpha=0.5)
+            ax.axhline(0, color='red', linestyle='--')
+            ax.set_xlabel(f'Predicciones - {cols[i]}')
+            ax.set_ylabel('Error (Pred - Real)')
+            ax.set_title(f'Error vs. Predicción para {cols[i]}')
+            ax.grid(True)
+
+            fig.tight_layout()
+            fig.savefig(os.path.join(self.rom_config['output_folder'], f"error_{cols[i]}.png"))
+            plt.close(fig)
+
+
         return 0

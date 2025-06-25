@@ -6,14 +6,7 @@ setup(
     description='A Reduced Order Modeling (ROM) framework',
     author='Ander Alvarez Sanz',  # Replace with your name
     author_email='aalvarezsanz@ideko.es',  # Replace with your email
-    packages=find_packages(where='idkROM'),  # Tells setuptools to find packages within the 'src' directory
-    package_dir={'': 'idkROM'},  # Maps the root package to the 'src' directory
-    py_modules=['main'],  # If main.py is meant to be a top-level module
-    entry_points={
-        'console_scripts': [
-            'idkrom=main:main',  # Creates a command 'idkrom' that runs the 'main' function from main.py
-        ],
-    },
+    packages=find_packages(),  # Tells setuptools to find packages within the 'src' directory
     install_requires=[
     'about-time==4.2.1',
     '',
@@ -240,25 +233,5 @@ setup(
     'ydata-profiling==4.16.1',
     '',
     '',
-],
-    extras_require={
-        'dev': [
-            'pytest',
-            'flake8',
-            # Add other development dependencies
-        ],
-    },
-    classifiers=[
-        'Development Status :: 3 - Alpha',  # Adjust as needed (Alpha, Beta, Stable, etc.)
-        'Intended Audience :: Developers',
-        'Topic :: Scientific/Engineering',
-        'License :: OSI Approved :: MIT License',  # Choose the appropriate license
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
-        'Programming Language :: Python :: 3.9',
-        'Programming Language :: Python :: 3.10',
-        'Programming Language :: Python :: 3.11',
-        'Programming Language :: Python :: 3.12',
-    ],
+]
 )

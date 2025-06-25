@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import pandas as pd
 import matplotlib.pyplot as plt
 import joblib
@@ -15,13 +16,17 @@ class Pre:
     creating box plots, and normalizing data.
     """
 
-    def __init__(self):
+    def __init__(self, model_name: str):
         """
         Initializes the Preprocessing class.
         Sets up input and output dataframes and creates the output folder if it doesn't exist.
         """        
-        self.output_folder = os.path.join(os.getcwd(), 'results')
-        os.makedirs(os.path.dirname(self.output_folder), exist_ok=True)
+        self.model_name = model_name
+
+        timestamp = datetime.now().strftime("%d-%m-%Y-%H-%M")
+        
+        self.output_folder = os.path.join(os.getcwd(), 'results', f"{self.model_name}_{timestamp}")
+        os.makedirs(self.output_folder, exist_ok=True)
 
 
     def boxplot(self, data: pd.DataFrame):
@@ -62,6 +67,7 @@ class Pre:
         Returns:
             tuple: Filtered input and target data.
         """
+
         concat_X_y = pd.concat([X, y], axis=1)
 
         # Profiling report
@@ -95,8 +101,8 @@ class Pre:
             raise ValueError(f"Unsupported method: {method}")
 
         # Separate filtered X and y
-        X_filtered = concat_X_y[X.columns]
-        y_filtered = concat_X_y[y.columns]
+        X_filtered = concat_X_y[X.columns].reset_index(drop=True)
+        y_filtered = concat_X_y[y.columns].reset_index(drop=True)
 
         return X_filtered, y_filtered
 
@@ -121,30 +127,7 @@ class Pre:
         elif imputer_type == 'knn':
             return KNNImputer()
         else:
-            raise ValueError(f"Imputer '{imputer_type}' is not supported.")
-        
-
-    def get_scaler(self, scaler_type: str):
-        """
-        Returns the chosen scaler.
-        
-        Args:
-            scaler_type (str): The type of scaler to use ('minmax', 'standard', 'robust').
-
-        Returns:
-            scaler: The scaler object to use for normalization.
-        
-        Raises:
-            ValueError: If the specified scaler type is not supported.
-        """
-        if scaler_type == 'minmax':
-            return MinMaxScaler()
-        elif scaler_type == 'standard':
-            return StandardScaler()
-        elif scaler_type == 'robust':
-            return RobustScaler()
-        else:
-            raise ValueError(f"Scaler '{scaler_type}' is not supported.")
+            raise ValueError(f"Imputer '{imputer_type}' is not supported.")        
 
 
     def split_dataset(self, inputs_df: pd.DataFrame, outputs_df: pd.DataFrame,
@@ -213,77 +196,99 @@ class Pre:
         return split_sets
 
 
-    def pre_process_data(self, inputs_df: pd.DataFrame, outputs_df: pd.DataFrame,
-                            test_size: float = 0.15, validation_size: float = 0, imputer_type: str = 'simple', 
-                            scaler_type: str = 'minmax', filter_method: str = 'isolation_forest',
-                            random_state=None):
+    def get_scaler(self, scaler_type: str):
         """
-        Applies preprocessing steps to the input data, including outlier removal, normalization,
-        and generating a profiling report. The scaler is fitted only on the training set and applied
-        to validation and test sets.
-
+        Returns the chosen scaler.
+        
         Args:
-            X_train (pd.DataFrame): Training input data.
-            y_train (pd.DataFrame): Training output data.
-            X_val (pd.DataFrame): Validation input data.
-            y_val (pd.DataFrame): Validation output data.
-            X_test (pd.DataFrame): Test input data.
-            y_test (pd.DataFrame): Test output data.
+            scaler_type (str): The type of scaler to use ('minmax', 'standard', 'robust').
 
         Returns:
-            tuple: Normalized training, validation, and test sets.
-        """
-
-        # We split the dataset into train, validation and test subsets
-        split_sets = self.split_dataset(inputs_df, outputs_df, test_size, validation_size, random_state)
+            scaler: The scaler object to use for normalization.
         
-        # Apply outlier filtering consistently across all sets
-        X_train, y_train = self.filter_outliers_data(split_sets[0], split_sets[1], 'train', filter_method, random_state)
+        Raises:
+            ValueError: If the specified scaler type is not supported.
+        """
+        if scaler_type == 'minmax': return MinMaxScaler()
+        if scaler_type == 'standard': return StandardScaler()
+        if scaler_type == 'robust': return RobustScaler()
+        raise ValueError(f"Scaler '{scaler_type}' not supported.")
 
-        # NO FILTRAMOS EL SET DE TEST NI EL DE VALIDACION
-        """X_test_filtered, y_test_filtered = self.filter_outliers_data(split_sets[2], split_sets[3], 'test', filter_method, random_state)"""
 
-        # Impute missing values if any
+    def pre_process_data(
+        self,
+        inputs_df: pd.DataFrame,
+        outputs_df: pd.DataFrame,
+        discrete_inputs: list[str],
+        test_size: float = 0.15,
+        validation_size: float = 0,
+        imputer_type: str = 'simple',
+        scaler_type: str = 'minmax',
+        filter_method: str = 'isolation_forest',
+        random_state=None
+    ):
+        # 1) split
+        split_sets = self.split_dataset(inputs_df, outputs_df, test_size, validation_size, random_state)
+        X_tr, y_tr, X_te, y_te, *rest = split_sets
+
+        # 2) imputation
         imputer = self.get_imputer(imputer_type)
-        X_train = pd.DataFrame(imputer.fit_transform(X_train), columns=X_train.columns)
-        X_test = pd.DataFrame(imputer.transform(split_sets[2]), columns=split_sets[2].columns)
+        X_tr_imp = pd.DataFrame(imputer.fit_transform(X_tr), columns=X_tr.columns)
+        X_te_imp = pd.DataFrame(imputer.transform(X_te), columns=X_te.columns)
 
-        # Set the scaler type
-        self.scaler_type = scaler_type
+        X_tr_imp = X_tr_imp.reset_index(drop=True)
+        y_tr = y_tr.reset_index(drop=True)
 
-        # Get the appropriate scaler
+        # 3) filter outliers on train
+        X_tr_imp, y_tr = self.filter_outliers_data(X_tr_imp, y_tr, 'train', filter_method, random_state)
+
+        # 4) split cont vs disc
+        cont = [c for c in X_tr_imp.columns if c not in discrete_inputs]
+        disc = discrete_inputs
+        X_tr_cont, X_tr_disc = X_tr_imp[cont], X_tr_imp[disc]
+        X_te_cont, X_te_disc = X_te_imp[cont], X_te_imp[disc]
+
+        # 5) scale continuous only
         input_scaler = self.get_scaler(scaler_type)
-        output_scaler = self.get_scaler(scaler_type)
-        # Scale inputs with an independent scaler
-        X_train = pd.DataFrame(input_scaler.fit_transform(X_train), columns=X_train.columns)
-        X_test = pd.DataFrame(input_scaler.transform(X_test), columns=X_test.columns)
+        X_tr_cont_s = pd.DataFrame(input_scaler.fit_transform(X_tr_cont), columns=cont, index=X_tr_cont.index)
+        X_te_cont_s = pd.DataFrame(input_scaler.transform(X_te_cont), columns=cont, index=X_te_cont.index)
         joblib.dump(input_scaler, os.path.join(self.output_folder, 'input_scaler.pkl'))
 
-        # Scale outputs with another independent scaler
-        y_train = pd.DataFrame(output_scaler.fit_transform(y_train), columns=split_sets[1].columns)
-        y_test = pd.DataFrame(output_scaler.transform(split_sets[3]), columns=split_sets[3].columns)
+        # reconstruct
+        X_tr_final = pd.concat([X_tr_cont_s, X_tr_disc.reset_index(drop=True)], axis=1)[X_tr_imp.columns]
+        X_te_final = pd.concat([X_te_cont_s, X_te_disc.reset_index(drop=True)], axis=1)[X_te_imp.columns]
+
+        # 6) scale outputs fully
+        output_scaler = self.get_scaler(scaler_type)
+        y_tr_s = pd.DataFrame(output_scaler.fit_transform(y_tr), columns=y_tr.columns, index=y_tr.index)
+        y_te_s = pd.DataFrame(output_scaler.transform(y_te), columns=y_te.columns, index=y_te.index)
         joblib.dump(output_scaler, os.path.join(self.output_folder, 'output_scaler.pkl'))
 
-        # Save preprocessed data in multiple CSV files according to the subset they belong to (input/output and train/validation/test)
-        X_train.to_csv(os.path.join(self.output_folder, 'X_train.csv'), index=False)
-        y_train.to_csv(os.path.join(self.output_folder, 'y_train.csv'), index=False)
-        X_test.to_csv(os.path.join(self.output_folder, 'X_test.csv'), index=False)
-        y_test.to_csv(os.path.join(self.output_folder, 'y_test.csv'), index=False)
-        data_after_split = [X_train, y_train, X_test, y_test]
+        # 7) save Parquet files en lugar de CSV
+        parquet_path = os.path.join(self.output_folder, 'data')
+        os.makedirs(parquet_path, exist_ok=True)
 
-        if len(split_sets) > 4:
-            # X_val_filtered, y_val_filtered = self.filter_outliers_data(split_sets[4], split_sets[5], 'validation', filter_method, random_state)
-            X_val = pd.DataFrame(imputer.transform(split_sets[4]), columns=split_sets[4].columns)
-            X_val = pd.DataFrame(input_scaler.transform(X_val), columns=X_val.columns)
-            y_val = pd.DataFrame(output_scaler.transform(split_sets[5]), columns=split_sets[5].columns)
-            data_after_split.extend([X_val, y_val])    
-            X_val.to_csv(os.path.join(self.output_folder, 'X_train.csv'), index=False)
-            y_val.to_csv(os.path.join(self.output_folder, 'y_train.csv'), index=False)
+        X_tr_final.to_parquet(os.path.join(parquet_path, 'X_train.parquet'), index=False)
+        y_tr_s.to_parquet(os.path.join(parquet_path, 'y_train.parquet'), index=False)
+        X_te_final.to_parquet(os.path.join(parquet_path, 'X_test.parquet'), index=False)
+        y_te_s.to_parquet(os.path.join(parquet_path, 'y_test.parquet'), index=False)
+
+        data = [X_tr_final, y_tr_s, X_te_final, y_te_s]
+        # validation
+        if rest:
+            X_val, y_val = rest
+            X_val_imp = pd.DataFrame(imputer.transform(X_val), columns=X_val.columns)
+            X_val_cont = X_val_imp[cont]; X_val_disc = X_val_imp[disc]
+            X_val_cont_s = pd.DataFrame(input_scaler.transform(X_val_cont), columns=cont)
+            X_val_final = pd.concat([X_val_cont_s, X_val_disc.reset_index(drop=True)], axis=1)[X_val_imp.columns]
+            y_val_s = pd.DataFrame(output_scaler.transform(y_val), columns=y_val.columns)
+
+            X_val_final.to_parquet(os.path.join(parquet_path, 'X_val.parquet'), index=False)
+            y_val_s.to_parquet(os.path.join(parquet_path, 'y_val.parquet'), index=False)
+
+            data.extend([X_val_final, y_val_s])
         else:
-            data_after_split.extend([None, None])    
+            data.extend([None, None])
 
-
-
-        print(f'Preprocessed data saved.')
-
-        return data_after_split, input_scaler, output_scaler
+        print("Preprocessed with selective scaling and saved to Parquet.")
+        return data, input_scaler, output_scaler

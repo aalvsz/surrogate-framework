@@ -14,6 +14,7 @@ class DataLoader:
     def __init__(self):
         self.results_path = None
         self.default_params = None
+        self.config = None
         pass
 
     def read_yml(self, config_path: str):
@@ -30,9 +31,11 @@ class DataLoader:
         # Preprocesamiento
         preprocess = config['preprocess']
         read_mode = preprocess.get('read mode', 'raw')
+        preprocessed_data_path = preprocess.get('processed data path', None)
         validation_mode = preprocess.get('validation mode', 'cross')
         imputer = preprocess.get('imputer', 'simple')
         scaler = preprocess.get('scaler', 'minmax')
+        scaler_path = os.path.join(os.getcwd(), preprocess.get('scaler path', None))
         filter_method = preprocess.get('filter method', 'isolation forest')
         validation = preprocess.get('validation', 'single')
         test_size = preprocess.get('test size', 0.15)
@@ -41,6 +44,7 @@ class DataLoader:
         # Modelo
         model_config = config['model']
         model_type = model_config['type']
+        discrete_inputs = model_config['discrete inputs']
         hyper_params_config = model_config['hyperparams']
         mode = hyper_params_config['mode']
 
@@ -115,46 +119,48 @@ class DataLoader:
             'data inputs': data_input,
             'data outputs': data_output,
             'read mode': read_mode,
+            'preprocessed data path': preprocessed_data_path,
             'validation mode': validation_mode,
             'imputer': imputer,
             'scaler': scaler,
+            'scaler path': scaler_path,
             'filter method': filter_method,
             'validation': validation,
             'test size': test_size,
             'validation size': validation_size,
             'model type': model_type,
             'mode': mode,
+            'discrete inputs': discrete_inputs,
             'hyperparams': hyper_params,
             'eval metrics': metrics,
             'plot': plot,
             'save': save
         }
 
-    def load_data(self, input_path=None, output_path=None, data_source="raw"):
+
+    def load_data(self, inputs_path=None, outputs_path=None, data_source="raw"):
         
 
         if data_source.lower() == "raw":
             # Nos quedamos con el directorio (sin el nombre del archivo)
-            self.results_path = os.path.dirname(os.path.dirname(input_path))
+            self.results_path = os.path.dirname(os.path.dirname(inputs_path))
             self.results_path = os.path.join(self.results_path, "results")
             
             # Leer datos usando coma como separador decimal
-            df_inputs = pd.read_csv(input_path, delimiter=",", decimal=".") 
-            df_outputs = pd.read_csv(output_path, delimiter=",", decimal=".")
+            df_inputs = pd.read_csv(inputs_path, delimiter=",", decimal=".") 
+            df_outputs = pd.read_csv(outputs_path, delimiter=",", decimal=".")
             
             return df_inputs, df_outputs
 
         else:
-            self.results_path = os.path.dirname(os.path.dirname(output_path))
-            self.results_path = os.path.join(self.results_path, "results")
 
             # Asumimos que los CSV ya contienen los datos preprocesados
-            X_train = pd.read_csv(os.path.join(self.results_path, 'X_train.csv'), sep=",")
-            y_train = pd.read_csv(os.path.join(self.results_path, 'y_train.csv'), sep=",")
-            X_val   = pd.read_csv(os.path.join(self.results_path, 'X_val.csv'), sep=",")
-            y_val   = pd.read_csv(os.path.join(self.results_path, 'y_val.csv'), sep=",")
-            X_test  = pd.read_csv(os.path.join(self.results_path, 'X_test.csv'), sep=",")
-            y_test  = pd.read_csv(os.path.join(self.results_path, 'y_test.csv'), sep=",")
+            X_train = pd.read_parquet(os.path.join(inputs_path, 'X_train.parquet'), sep=",")
+            y_train = pd.read_parquet(os.path.join(inputs_path, 'y_train.parquet'), sep=",")
+            X_val   = pd.read_parquet(os.path.join(inputs_path, 'X_val.parquet'), sep=",")
+            y_val   = pd.read_parquet(os.path.join(inputs_path, 'y_val.parquet'), sep=",")
+            X_test  = pd.read_parquet(os.path.join(inputs_path, 'X_test.parquet'), sep=",")
+            y_test  = pd.read_parquet(os.path.join(inputs_path, 'y_test.parquet'), sep=",")
             
             return X_train, y_train, X_val, y_val, X_test, y_test
 
@@ -164,62 +170,60 @@ class DataLoader:
         Actualiza un archivo YAML con los valores proporcionados en dict_hyperparams,
         siguiendo las rutas especificadas en la sección idk_params del YAML.
         Preserva comentarios y formato original del archivo.
-        
-        Args:
-            config_yml_path (str): Ruta al archivo YAML a modificar
-            dict_hyperparams (dict): Diccionario con los parámetros a actualizar
-            
-        Returns:
-            None: El archivo YAML se modifica directamente
         """
-        # Verificar que el archivo existe
+        # 1) Verificar que el archivo existe
         if not os.path.exists(config_yml_path):
             raise FileNotFoundError(f"El archivo {config_yml_path} no existe")
         
-        # Cargar el archivo YAML preservando comentarios
-        with open(config_yml_path, 'r', encoding='utf-8') as file:
-            # Usamos ruamel.yaml que preserva comentarios y formato
-            yaml_parser = YAML()
-            yaml_parser.preserve_quotes = True
-            yaml_parser.indent(mapping=2, sequence=4, offset=2)
-            config = yaml_parser.load(file)
+        # 2) Cargar el YAML preservando comentarios
+        yaml_parser = YAML()
+        yaml_parser.preserve_quotes = True
+        yaml_parser.indent(mapping=2, sequence=4, offset=2)
+        with open(config_yml_path, 'r', encoding='utf-8') as f:
+            config = yaml_parser.load(f)
         
-        # Verificar que existe la sección idk_params
+        # 3) Aplanar dict_hyperparams (sacar todos los pares param: value)
+        flat_params = {}
+        def _flatten(d):
+            for k, v in d.items():
+                if isinstance(v, dict):
+                    _flatten(v)
+                else:
+                    flat_params[k] = v
+        _flatten(dict_hyperparams)
+        
+        # 4) Verificar que existe la sección idk_params
         if 'idk_params' not in config:
-            raise KeyError("La sección 'idk_params' no existe en el archivo YAML")
+            raise KeyError("La sección 'idk_params' no existe en el archivo YAML de destino.")
         
-        # Iterar sobre los parámetros a modificar
-        for param, value in dict_hyperparams.items():
-            # Verificar que el parámetro existe en idk_params
+        # 5) Iterar sobre cada parámetro “plano”
+        for param, value in flat_params.items():
             if param not in config['idk_params']:
-                print(f"Advertencia: El parámetro '{param}' no está definido en idk_params y será ignorado")
+                print(f"Advertencia: El parámetro '{param}' no está definido en idk_params y se ignora")
                 continue
             
-            # Obtener la ruta para el parámetro
+            # Obtener la ruta (lista de claves) donde debe escribirse
             param_path = config['idk_params'][param]
             
-            # Navegar a través de la ruta en el YAML
+            # Navegar por el YAML hasta la clave final y asignar el valor
             target = config
-            for i, key in enumerate(param_path):
-                # Verificar que todas las claves existen en el camino
+            for idx, key in enumerate(param_path):
                 if key not in target:
-                    print(f"Advertencia: La clave '{key}' no existe en la ruta {param_path[:i+1]}")
+                    print(f"Advertencia: Clave '{key}' no existe en la ruta {param_path[:idx+1]}")
                     break
                 
-                # Si es el último elemento, actualizamos el valor
-                if i == len(param_path) - 1:
+                # Si es el último paso de la ruta, actualizar
+                if idx == len(param_path) - 1:
                     target[key] = value
                 else:
-                    # Si no es el último, seguimos navegando
                     target = target[key]
         
-        # Guardar los cambios en el archivo YAML preservando comentarios y formato
-        with open(config_yml_path, 'w', encoding='utf-8') as file:
-            yaml_parser.dump(config, file)
+        # 6) Volver a escribir el archivo, preservando formato y comentarios
+        with open(config_yml_path, 'w', encoding='utf-8') as f:
+            yaml_parser.dump(config, f)
         
-        print(f"Archivo {config_yml_path} actualizado correctamente preservando comentarios y formato")
-
-        
+        print(f"Archivo {config_yml_path} actualizado correctamente preservando formato y comentarios")
+            
 if __name__ == "__main__":
 
     # TESTEAR LA LECTURA DEL YAML ################################################################################################################

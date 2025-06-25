@@ -23,7 +23,8 @@ class GaussianProcessROM(idkROM.Modelo):
    
         
         self.model_name = rom_config['model_name']
-        
+        self.output_folder = rom_config['output_folder']
+
         # Configurar el kernel
         if self.kernel == "RBF":
             self.kernel_instance = RBF(length_scale=1.0) + ConstantKernel(constant_value=self.cst_kernel)
@@ -141,34 +142,33 @@ class GaussianProcessROM(idkROM.Modelo):
                 raise ValueError("El número de variables de entrada no coincide con el número de columnas en X_train. Se esperaban {} variables, pero se recibieron {}.".format(len(self.X_train.columns), len(X_params_dict)))
         else:
             print("Advertencia: No se pudo verificar el número de variables de X_train, 'X_train' no está definido o no tiene atributo 'columns'.")
-        
-        # Convertir el diccionario de entrada a un arreglo de NumPy en forma de batch (1, n_features)
-        X = np.array([list(X_params_dict.values())])
-        
-        # Realizar la predicción utilizando la función predict
-        y_pred = self.predict(X)
-        
-        # Aplanar la salida para trabajar con un array 1D si es necesario
-        if y_pred.ndim > 1:
-            # Si y_pred es 2D y tiene una sola fila, se aplana
-            y_pred_flat = y_pred.flatten() if y_pred.shape[0] == 1 else y_pred[0]
-        else:
-            y_pred_flat = y_pred
 
-        # Verificar que el número de resultados coincide con el número de columnas de y_train
+        # 1) Crear array de entrada
+        X = np.array([list(X_params_dict.values())], dtype=float)  # shape (1, n_features)
+
+        # 2) Predicción escalada
+        y_pred_scaled = self.predict(X)
+
+        # 3) Aplanar la salida si es necesario
+        if y_pred_scaled.ndim > 1:
+            y_pred_flat = y_pred_scaled.flatten() if y_pred_scaled.shape[0] == 1 else y_pred_scaled[0]
+        else:
+            y_pred_flat = y_pred_scaled
+
+        # 4) Desescalado
+        output_scaler = joblib.load(os.path.join(self.output_folder, 'output_scaler.pkl'))
+
+        y_in = y_pred_flat.reshape(1, -1) if y_pred_flat.ndim == 1 else y_pred_flat
+        y_pred_orig = output_scaler.inverse_transform(y_in)[0]
+
+        # 5) Construir diccionario de salida
         if hasattr(self, "y_train") and hasattr(self.y_train, "columns"):
-            expected_n_results = len(self.y_train.columns)
-            if y_pred_flat.size != expected_n_results:
-                raise ValueError(f"El número de resultados predichos ({y_pred_flat.size}) no coincide con el número de columnas en y_train ({expected_n_results}).")
-            # Obtener los nombres de las columnas a utilizar como llaves
-            target_keys = list(self.y_train.columns)
+            keys = list(self.y_train.columns)
+            if len(keys) != len(y_pred_orig):
+                raise ValueError(f"El número de resultados predichos ({len(y_pred_orig)}) no coincide con el número de columnas en y_train ({len(keys)}).")
         else:
             print("Advertencia: No se pudo obtener las columnas de y_train, se usarán llaves genéricas.")
-            target_keys = [f"result{i+1}" for i in range(y_pred_flat.size)]
-        
-        # Construir el diccionario de resultados utilizando los nombres de columnas como llaves
-        results = {}
-        for key, value in zip(target_keys, y_pred_flat):
-            results[key] = value
+            keys = [f"result{i+1}" for i in range(len(y_pred_orig))]
 
+        results = {k: float(v) for k, v in zip(keys, y_pred_orig)}
         return results

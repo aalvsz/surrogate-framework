@@ -4,17 +4,6 @@ Version: 0.1.0
 Summary: A Reduced Order Modeling (ROM) framework
 Author: Ander Alvarez Sanz
 Author-email: aalvarezsanz@ideko.es
-Classifier: Development Status :: 3 - Alpha
-Classifier: Intended Audience :: Developers
-Classifier: Topic :: Scientific/Engineering
-Classifier: License :: OSI Approved :: MIT License
-Classifier: Programming Language :: Python :: 3
-Classifier: Programming Language :: Python :: 3.7
-Classifier: Programming Language :: Python :: 3.8
-Classifier: Programming Language :: Python :: 3.9
-Classifier: Programming Language :: Python :: 3.10
-Classifier: Programming Language :: Python :: 3.11
-Classifier: Programming Language :: Python :: 3.12
 Requires-Dist: about-time==4.2.1
 Requires-Dist: alive-progress==3.2.0
 Requires-Dist: altair==5.5.0
@@ -127,12 +116,7 @@ Requires-Dist: wcwidth==0.2.13
 Requires-Dist: wordcloud==1.9.4
 Requires-Dist: wrapt==1.17.2
 Requires-Dist: ydata-profiling==4.16.1
-Provides-Extra: dev
-Requires-Dist: pytest; extra == "dev"
-Requires-Dist: flake8; extra == "dev"
 Dynamic: author
 Dynamic: author-email
-Dynamic: classifier
-Dynamic: provides-extra
 Dynamic: requires-dist
 Dynamic: summary
