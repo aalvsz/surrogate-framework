@@ -1,12 +1,9 @@
-import os
-import pickle
 from idkrom.model import idkROM
-from contextlib import redirect_stdout
 
 # OBJETIVO
 # que el usuario no tenga la mano sobre el modelo
 
-random_state = 5
+random_state = 11
 
 # en el config.yml tenemos el input data
 # entonces solo con leer el diccionario en el run,

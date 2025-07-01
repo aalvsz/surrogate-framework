@@ -58,8 +58,6 @@ class idkROM(ABC):
 
         
     def load(self, loader, config_yml=None):
-
-        
         config_dict = loader.read_yml(os.path.join(os.getcwd(), config_yml))
 
         inputs_file_path = config_dict['data inputs']
@@ -84,36 +82,59 @@ class idkROM(ABC):
         self.output_folder = preprocessor.output_folder
 
         if data_source == "raw":
-            ##### CARGAR LOS DATOS
-            inputs_df, outputs_df = loader.load_data(inputs_path=inputs_file_path, outputs_path=outputs_file_path, data_source="raw")
+            # 1. Cargar datos
+            inputs_df, outputs_df = loader.load_data(
+                inputs_path=inputs_file_path,
+                outputs_path=outputs_file_path,
+                data_source="raw"
+            )
             print(f"Datos cargados.")
+            
+            output_scalers = {
+                col: 'minmax' if col.startswith('TCP') else scaler
+                for col in outputs_df.columns
+            }
 
-            ##### PREPROCESAMIENTO
+
+            # 2. Preprocesar con escalers individuales si hay
             data_after_split, self.input_scaler, self.output_scaler = preprocessor.pre_process_data(
-                            inputs_df, outputs_df, discrete_inputs,
-                            test_set_size, validation_set_size,
-                            imputer, scaler, filter_method, self.random_state
-                        )
-        else: 
-            # Cargamos los datos preprocesados
-            X_train, y_train, X_val, y_val, X_test, y_test = loader.load_data(inputs_path=preprocessed_data_path, data_source="pre")
+                inputs_df, outputs_df, discrete_inputs,
+                test_set_size, validation_set_size,
+                imputer, scaler, filter_method,
+                self.random_state,
+                output_scalers=output_scalers
+            )
+
+        else:
+            # 3. Si viene de preprocesado
+            X_train, y_train, X_val, y_val, X_test, y_test = loader.load_data(
+                inputs_path=preprocessed_data_path,
+                data_source="pre"
+            )
             data_after_split = [X_train, y_train, X_test, y_test, X_val, y_val]
             print(f"Datos preprocesados cargados.")
 
+            # Si cargas datos preprocesados, asegúrate de cargar el dict de scalers también:
+            scaler_path = os.path.join(preprocessor.output_folder, "output_scaler.pkl")
+            import joblib
+            self.output_scaler = joblib.load(scaler_path)
+
+        # Crear config ROM
         rom_config = {
-        'validation_mode': validation_mode,    
-        'input_dim': data_after_split[0].shape[1],
-        'output_dim': data_after_split[1].shape[1],
-        'discrete_inputs': discrete_inputs,
-        'hyperparams': hyperparams if mode in ['best', 'manual'] else default_params[model_name],
-        'mode': mode,
-        'model_name': model_name,
-        'output_folder': self.output_folder,
-        'eval_metrics': eval_metrics
+            'validation_mode': validation_mode,
+            'input_dim': data_after_split[0].shape[1],
+            'output_dim': data_after_split[1].shape[1],
+            'discrete_inputs': discrete_inputs,
+            'hyperparams': hyperparams if mode in ['best', 'manual'] else default_params[model_name],
+            'mode': mode,
+            'model_name': model_name,
+            'output_folder': self.output_folder,
+            'eval_metrics': eval_metrics
         }
 
         print(f"\nConfiguracion del ROM: {rom_config}")
         return rom_config, data_after_split
+
 
 
     def train_and_predict(self, rom_config, data_after_split, only_train=False):
@@ -151,9 +172,9 @@ class idkROM(ABC):
 
     def evaluate(self, y_test_df, y_pred_arr, rom_config: dict):
         """
-        Evaluates the model and saves metrics to a JSON file.
+        Evaluates the model and saves metrics to a JSON file and a TXT file with detailed errors.
         """
-        # Convert inputs to numpy arrays
+        # Convert to numpy
         y_test_np = y_test_df.to_numpy()
         y_pred_np = np.array(y_pred_arr)
 
@@ -165,15 +186,11 @@ class idkROM(ABC):
         if rom_config['eval_metrics'] == 'mse':
             mse_scaled = float(np.mean((y_pred_np - y_test_np)**2))
             results['MSE_scaled'] = mse_scaled
-
-            # Per-column scaled MSE
             mse_per_col_scaled = (np.mean((y_pred_np - y_test_np)**2, axis=0)).tolist()
             results['MSE_scaled_per_col'] = dict(zip(y_test_df.columns, mse_per_col_scaled))
-
         elif rom_config['eval_metrics'] == 'mae':
             mae_scaled = float(np.mean(np.abs(y_pred_np - y_test_np)))
             results['MAE_scaled'] = mae_scaled
-
         elif rom_config['eval_metrics'] == 'mape':
             eps = 1e-10
             mape_scaled = float(np.mean(np.abs((y_test_np - y_pred_np)/(y_test_np + eps))) * 100)
@@ -184,39 +201,99 @@ class idkROM(ABC):
         # ========================
         # Metrics on original data
         # ========================
-        y_test_orig = self.output_scaler.inverse_transform(y_test_np)
-        y_pred_orig = self.output_scaler.inverse_transform(y_pred_np)
+        y_test_orig = []
+        y_pred_orig = []
+
+        for i, col in enumerate(y_test_df.columns):
+            scaler = self.output_scaler[col]
+            y_test_orig.append(scaler.inverse_transform(y_test_np[:, i].reshape(-1, 1)).flatten())
+            y_pred_orig.append(scaler.inverse_transform(y_pred_np[:, i].reshape(-1, 1)).flatten())
+
+        y_test_orig = np.vstack(y_test_orig).T
+        y_pred_orig = np.vstack(y_pred_orig).T
 
         if rom_config['eval_metrics'] == 'mse':
             mse_orig = float(np.mean((y_pred_orig - y_test_orig)**2))
             results['MSE_original'] = mse_orig
-
             mse_per_col_orig = (np.mean((y_pred_orig - y_test_orig)**2, axis=0)).tolist()
             results['MSE_original_per_col'] = dict(zip(y_test_df.columns, mse_per_col_orig))
-
         elif rom_config['eval_metrics'] == 'mae':
             mae_orig = float(np.mean(np.abs(y_pred_orig - y_test_orig)))
             results['MAE_original'] = mae_orig
-
         elif rom_config['eval_metrics'] == 'mape':
             eps = 1e-10
             mape_orig = float(np.mean(np.abs((y_test_orig - y_pred_orig)/(y_test_orig + eps))) * 100)
             results['MAPE_original'] = mape_orig
 
         # ========================
-        # Error graphs & BIC
+        # Save detailed errors to TXT (with means)
         # ========================
-        errors = ErrorMetrics(self, rom_config, pd.DataFrame(y_test_np, columns=y_test_df.columns), y_pred_np)
-        bic_val = errors.calculate_bic(pd.DataFrame(y_test_np, columns=y_test_df.columns), y_pred_np)
-        results['BIC'] = float(bic_val)
+        def format_num(num, threshold_low=1e-4, threshold_high=1e4, decimals=6):
+            """
+            Formatea num en notación científica si es mayor que threshold_high o menor que threshold_low.
+            """
+            if abs(num) != 0 and (abs(num) < threshold_low or abs(num) > threshold_high):
+                return f"{num:.{decimals}e}"
+            return f"{num:.{decimals}f}"
 
+
+        # ========================
+        # Save detailed errors to TXT (with means)
+        # ========================
+        txt_path = os.path.join(self.output_folder, "predictions_errors.txt")
+
+        with open(txt_path, "w", encoding="utf-8") as f:
+            mean_error_line = "Promedio: "
+            mean_parts = []
+
+            # Calcular promedios
+            for j, col in enumerate(y_test_df.columns):
+                errors = y_pred_orig[:, j] - y_test_orig[:, j]
+                errors_pct = errors / (y_test_orig[:, j] + 1e-10) * 100
+
+                mean_error = np.mean(np.abs(errors))
+                mean_error_pct = np.mean(np.abs(errors_pct))
+
+                mean_parts.append(
+                    f"{col} -> error={format_num(mean_error)}, error%={format_num(mean_error_pct)}%"
+                )
+
+            mean_error_line += " | ".join(mean_parts)
+            f.write(mean_error_line + "\n\n")
+
+            # Por fila
+            for i in range(len(y_test_orig)):
+                line = f"fila {i}: "
+                parts = []
+                for j, col in enumerate(y_test_df.columns):
+                    true_val = y_test_orig[i, j]
+                    pred_val = y_pred_orig[i, j]
+                    error = pred_val - true_val
+                    error_pct = (error / (true_val + 1e-10)) * 100
+
+                    parts.append(
+                        f"{col} -> esperado={format_num(true_val)}, "
+                        f"predicho={format_num(pred_val)}, "
+                        f"error={format_num(error)}, "
+                        f"error%={format_num(error_pct)}%"
+                    )
+                line += " | ".join(parts)
+                f.write(line + "\n")
+
+        print(f"Errores individuales guardados en {txt_path}")
+
+
+        # ========================
+        # Error graphs 
+        # ========================
+        errors = ErrorMetrics(self, rom_config, pd.DataFrame(y_test_orig, columns=y_test_df.columns), y_pred_orig)
         try:
             errors.create_error_graphs()
         except Exception as e:
             print(f"Error creating error graphs: {e}")
 
         # ========================
-        # Save results to JSON
+        # Save metrics JSON
         # ========================
         output_path = os.path.join(self.output_folder, "metrics_results.json")
         with open(output_path, 'w', encoding='utf-8') as f:
@@ -245,6 +322,7 @@ class idkROM(ABC):
         metric = self.run(self.config_yml_path)
 
         return metric
+
     
     
     def rom_training_pipeline(self, data):

@@ -6,6 +6,7 @@ import pandas as pd
 from sklearn.model_selection import KFold
 from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler
 from torch.optim.lr_scheduler import StepLR
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torch.optim as optim
 from idkrom.model import idkROM
 
@@ -48,6 +49,7 @@ class NeuralNetworkROM(idkROM.Modelo):
             self.output_dim = int(rom_config['output_dim'])
             self.output_folder = rom_config['output_folder']
             hyperparams = rom_config['hyperparams'] # Alias para hiperparámetros
+
             self.hidden_layers = int(hyperparams['n_layers'])
             self.neurons_per_layer = int(hyperparams['n_neurons'])
             self.learning_rate = float(hyperparams['learning_rate'])
@@ -61,11 +63,14 @@ class NeuralNetworkROM(idkROM.Modelo):
             self.patience = int(hyperparams['patience'])
             self.cv_folds = int(hyperparams['cv_folds'])
             self.convergence_threshold = float(hyperparams['convergence_threshold'])
+            
             self.model_name = rom_config['model_name']
         except KeyError as e:
             raise KeyError(f"Falta el parámetro requerido en rom_config: {e}")
         except ValueError as e:
              raise ValueError(f"Error convirtiendo parámetro a tipo numérico: {e}")
+
+        self.hyperparams = hyperparams
 
         self.random_state = random_state
         torch.manual_seed(self.random_state) # Seed para PyTorch
@@ -280,6 +285,7 @@ class NeuralNetworkROM(idkROM.Modelo):
                 model_fold = self._crear_red_neuronal() # Usa parámetros de self
                 optimizer_fold = self._get_optimizer(model_fold)
                 scheduler_fold = StepLR(optimizer_fold, step_size=self.lr_step, gamma=self.lr_decrease_rate)
+                
                 loss_function = torch.nn.MSELoss()
 
                 best_fold_val_loss = float('inf')
@@ -504,14 +510,27 @@ class NeuralNetworkROM(idkROM.Modelo):
 
 
         # 3) Desescala si tienes scaler
-        #if hasattr(self, 'output_scaler') and self.output_scaler is not None:
-        output_scaler = joblib.load(os.path.join(self.output_folder, 'output_scaler.pkl'))
+        # Cargar el diccionario de scalers
+        output_scalers: dict = joblib.load(os.path.join(self.output_folder, 'output_scaler.pkl'))
 
-        # Asegúrate de que sea 2D
-        y_in = y_pred_flat.reshape(1, -1) if y_pred_flat.ndim == 1 else y_pred_flat
-        y_pred_orig = output_scaler.inverse_transform(y_in)[0]
-        #else:
-        #    y_pred_orig = y_pred_flat
+        # Asegura que sea array 1D
+        if y_pred_scaled.ndim > 1:
+            y_pred_flat = y_pred_scaled.flatten()
+        else:
+            y_pred_flat = y_pred_scaled
+
+        # Obtener nombres de columnas de salida
+        keys = list(self.y_train.columns) if hasattr(self, 'y_train') else [f"out{i}" for i in range(len(y_pred_flat))]
+
+        # Aplicar scaler individual por columna
+        y_pred_orig = []
+        for i, col in enumerate(keys):
+            scaler = output_scalers[col]
+            val = scaler.inverse_transform([[y_pred_flat[i]]])[0][0]
+            y_pred_orig.append(val)
+
+        # Construir el diccionario de resultados
+        results = {k: float(v) for k, v in zip(keys, y_pred_orig)}
 
         # 4) Mapear a dict con nombres de columnas
         # Construir el diccionario de resultados utilizando los nombres de columnas como llaves

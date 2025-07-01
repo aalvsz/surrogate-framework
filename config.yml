@@ -58,8 +58,8 @@ idk_params:
 
 
 data:
-  input: C:\Users\aalvarezsanz\OneDrive - DanobatGroup\Documentos\idk_framework\DOE_datos\post\inputs.csv
-  output: C:\Users\aalvarezsanz\OneDrive - DanobatGroup\Documentos\idk_framework\DOE_datos\post\outputs_filtrados_2.csv
+  input: C:\Users\aalvarezsanz\OneDrive - DanobatGroup\Documentos\idk_framework\DOE_datos\Carga carro\inputs.csv
+  output: C:\Users\aalvarezsanz\OneDrive - DanobatGroup\Documentos\idk_framework\DOE_datos\Carga carro\outputs.csv
 
 preprocess:
   read mode: raw
@@ -92,6 +92,13 @@ model:
       patience: 100
       cv_folds: 5
       convergence_threshold: 1e-09
+
+evaluate:
+  metrics: mse
+  plot: true
+  save: true
+
+
 
 
 #  type: gaussian_process
@@ -157,7 +164,3 @@ model:
 #      #loss: [mse, mae, mape]
 
 
-evaluate:
-  metrics: mse
-  plot: true
-  save: true

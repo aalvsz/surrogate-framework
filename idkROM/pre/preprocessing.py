@@ -3,6 +3,7 @@ from datetime import datetime
 import pandas as pd
 import matplotlib.pyplot as plt
 import joblib
+import json
 from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import IsolationForest
@@ -225,8 +226,10 @@ class Pre:
         imputer_type: str = 'simple',
         scaler_type: str = 'minmax',
         filter_method: str = 'isolation_forest',
-        random_state=None
+        random_state=None,
+        output_scalers: dict = None  # <- NUEVO: dict tipo {'col1': 'robust', 'col2': 'standard'}
     ):
+
         # 1) split
         split_sets = self.split_dataset(inputs_df, outputs_df, test_size, validation_size, random_state)
         X_tr, y_tr, X_te, y_te, *rest = split_sets
@@ -259,21 +262,42 @@ class Pre:
         X_te_final = pd.concat([X_te_cont_s, X_te_disc.reset_index(drop=True)], axis=1)[X_te_imp.columns]
 
         # 6) scale outputs fully
-        output_scaler = self.get_scaler(scaler_type)
-        y_tr_s = pd.DataFrame(output_scaler.fit_transform(y_tr), columns=y_tr.columns, index=y_tr.index)
-        y_te_s = pd.DataFrame(output_scaler.transform(y_te), columns=y_te.columns, index=y_te.index)
-        joblib.dump(output_scaler, os.path.join(self.output_folder, 'output_scaler.pkl'))
+        if output_scalers is None:
+            output_scalers = {col: scaler_type for col in y_tr.columns}  # usa uno para todos
+
+        scalers_aplicados = {}
+        scaled_tr_cols = []
+        scaled_te_cols = []
+        scalers_aplicados = {}
+
+        for col in y_tr.columns:
+            scaler = self.get_scaler(output_scalers.get(col, scaler_type))
+            tr_scaled = scaler.fit_transform(y_tr[[col]])
+            te_scaled = scaler.transform(y_te[[col]])
+            
+            scaled_tr_cols.append(pd.DataFrame(tr_scaled, columns=[col], index=y_tr.index))
+            scaled_te_cols.append(pd.DataFrame(te_scaled, columns=[col], index=y_te.index))
+            
+            scalers_aplicados[col] = scaler
+
+        # Unir columnas de golpe (esto evita el PerformanceWarning)
+        y_tr_scaled = pd.concat(scaled_tr_cols, axis=1)
+        y_te_scaled = pd.concat(scaled_te_cols, axis=1)
+
+
+        joblib.dump(scalers_aplicados, os.path.join(self.output_folder, 'output_scaler.pkl'))
+
 
         # 7) save Parquet files en lugar de CSV
         parquet_path = os.path.join(self.output_folder, 'data')
         os.makedirs(parquet_path, exist_ok=True)
 
         X_tr_final.to_parquet(os.path.join(parquet_path, 'X_train.parquet'), index=False)
-        y_tr_s.to_parquet(os.path.join(parquet_path, 'y_train.parquet'), index=False)
+        y_tr_scaled.to_parquet(os.path.join(parquet_path, 'y_train.parquet'), index=False)
         X_te_final.to_parquet(os.path.join(parquet_path, 'X_test.parquet'), index=False)
-        y_te_s.to_parquet(os.path.join(parquet_path, 'y_test.parquet'), index=False)
+        y_te_scaled.to_parquet(os.path.join(parquet_path, 'y_test.parquet'), index=False)
 
-        data = [X_tr_final, y_tr_s, X_te_final, y_te_s]
+        data = [X_tr_final, y_tr_scaled, X_te_final, y_te_scaled]
         # validation
         if rest:
             X_val, y_val = rest
@@ -281,14 +305,26 @@ class Pre:
             X_val_cont = X_val_imp[cont]; X_val_disc = X_val_imp[disc]
             X_val_cont_s = pd.DataFrame(input_scaler.transform(X_val_cont), columns=cont)
             X_val_final = pd.concat([X_val_cont_s, X_val_disc.reset_index(drop=True)], axis=1)[X_val_imp.columns]
-            y_val_s = pd.DataFrame(output_scaler.transform(y_val), columns=y_val.columns)
+            scaled_val_cols = []
+
+            for col in y_val.columns:
+                scaler = scalers_aplicados[col]
+                scaled_col = pd.Series(scaler.transform(y_val[[col]]).flatten(), name=col)
+                scaled_val_cols.append(scaled_col)
+
+            y_val_scaled = pd.concat(scaled_val_cols, axis=1)
+
 
             X_val_final.to_parquet(os.path.join(parquet_path, 'X_val.parquet'), index=False)
-            y_val_s.to_parquet(os.path.join(parquet_path, 'y_val.parquet'), index=False)
+            y_val_scaled.to_parquet(os.path.join(parquet_path, 'y_val.parquet'), index=False)
 
-            data.extend([X_val_final, y_val_s])
+            data.extend([X_val_final, y_val_scaled])
         else:
             data.extend([None, None])
 
+        with open(os.path.join(self.output_folder, 'output_scaler_meta.json'), 'w') as f:
+            json.dump({col: type(scaler).__name__ for col, scaler in scalers_aplicados.items()}, f, indent=2)
+
+
         print("Preprocessed with selective scaling and saved to Parquet.")
-        return data, input_scaler, output_scaler
+        return data, input_scaler, scalers_aplicados
