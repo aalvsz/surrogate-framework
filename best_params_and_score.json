@@ -1,9 +1,0 @@
-{
-    "best_params": {
-        "model__regressor__module__activation": "relu",
-        "model__regressor__module__dropout": 0.1,
-        "model__regressor__module__n_layers": 2,
-        "model__regressor__module__n_neurons": 128
-    },
-    "best_score": -4587.51318359375
-}

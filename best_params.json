@@ -1,8 +1,0 @@
-{
-  "model__callbacks": [
-    "<skorch.callbacks.lr_scheduler.LRScheduler object at 0x00000244023C4320>"
-  ],
-  "model__lr": "0.001",
-  "model__module__dropout": "0.1",
-  "model__optimizer": "Adam"
-}
