@@ -6,5 +6,6 @@ setup(
     description='A Reduced Order Modeling (ROM) framework',
     author='Ander Alvarez Sanz',  # Replace with your name
     author_email='aalvarezsanz@ideko.es',  # Replace with your email
-    packages=find_packages(where="src")
+    packages=find_packages(where="src"),
+    package_dir={"": "src"},
 )
