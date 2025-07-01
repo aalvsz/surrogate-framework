@@ -1,4 +1,4 @@
-from idkrom.model import idkROM
+from src.idkrom.model import idkROM
 
 # OBJETIVO
 # que el usuario no tenga la mano sobre el modelo
