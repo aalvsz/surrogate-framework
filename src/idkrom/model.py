@@ -15,13 +15,14 @@ class idkROM(ABC):
     def __init__(self, random_state=None, config_yml_path=None, data_dict=None):
         base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-        config_yml_path = os.path.join(base_path, "config.yml")
-        print(f"Este es el path del yaml {config_yml_path}.")
+        
 
-        self.config_yml_path = config_yml_path
+        self.config_yml_path = config_yml_path if config_yml_path is not None else os.path.join(base_path, "config.yml")# por si queremos pasar el YAML de configuración como argumento
+
+        print(f"Este es el path del yaml {self.config_yml_path}.")
+
         self.random_state = random_state
-        self.config_yml_path = config_yml_path
-        self.data_dict = data_dict
+        self.data_dict = data_dict # por si queremos pasar el diccionario de configuración como argumento
 
         self.config_dict = None
         self.X_train = None
@@ -58,7 +59,7 @@ class idkROM(ABC):
 
         
     def load(self, loader, config_yml=None):
-        config_dict = loader.read_yml(os.path.join(os.getcwd(), config_yml))
+        config_dict = loader.read_yml(self.config_yml_path)
 
         inputs_file_path = config_dict['data inputs']
         outputs_file_path = config_dict['data outputs']
