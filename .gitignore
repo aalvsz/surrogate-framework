@@ -1,5 +1,5 @@
-results
-data
-docs
-site
-virtual_env
+results/
+data/
+docs/
+site/
+virtual_env/
