@@ -9,20 +9,28 @@ from idkrom.utils.metrics import ErrorMetrics
 from idkrom.utils.save_model import save_rom_instance
 
 
-
 class idkROM(ABC):
+    """
+    Clase base para modelos ROM (Reduced Order Model) en el framework idkROM.
+
+    Proporciona métodos para cargar datos, preprocesar, entrenar, predecir y evaluar modelos.
+    Sirve como plantilla para subclases específicas de cada tipo de modelo ROM.
+    """
 
     def __init__(self, random_state=None, config_yml_path=None, data_dict=None):
+        """
+        Inicializa la clase base idkROM.
+
+        Args:
+            random_state (int, optional): Semilla para reproducibilidad.
+            config_yml_path (str, optional): Ruta al archivo de configuración YAML.
+            data_dict (dict, optional): Diccionario de configuración de datos.
+        """
         base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-        
-
-        self.config_yml_path = config_yml_path if config_yml_path is not None else os.path.join(base_path, "config.yml")# por si queremos pasar el YAML de configuración como argumento
-
+        self.config_yml_path = config_yml_path if config_yml_path is not None else os.path.join(base_path, "config.yml")
         print(f"Este es el path del yaml {self.config_yml_path}.")
-
         self.random_state = random_state
-        self.data_dict = data_dict # por si queremos pasar el diccionario de configuración como argumento
+        self.data_dict = data_dict
 
         self.config_dict = None
         self.X_train = None
@@ -35,34 +43,76 @@ class idkROM(ABC):
         self.output_scaler = None
         self.output_folder = None
 
-    """Clase base abstracta
-    Sirve de plantilla para las subclases de cada método ROM, donde se implementan las funciones train y evaluate dedicadas."""
     class Modelo(ABC):
+        """
+        Clase abstracta interna para definir la interfaz de los modelos ROM concretos.
+        """
+
         def __init__(self, rom_config, random_state):
+            """
+            Inicializa el modelo base.
+
+            Args:
+                rom_config (dict): Configuración del modelo ROM.
+                random_state (int): Semilla para reproducibilidad.
+            """
             self.rom_config = rom_config
             self.random_state = random_state
 
         @abstractmethod
         def train(self, X_train, y_train, X_val, y_val):
-            """Método a sobrescribir en cada subclase"""
+            """
+            Método abstracto para entrenar el modelo.
+
+            Args:
+                X_train: Datos de entrenamiento.
+                y_train: Etiquetas de entrenamiento.
+                X_val: Datos de validación.
+                y_val: Etiquetas de validación.
+            """
             raise NotImplementedError
-        
+
         @abstractmethod
         def predict(self, X_test):
-            """Método a sobrescribir en cada subclase"""
+            """
+            Método abstracto para predecir con el modelo.
+
+            Args:
+                X_test: Datos de prueba.
+            """
             raise NotImplementedError
-        
+
         @abstractmethod
         def idk_run(self, X_train, y_train, X_val, y_val, X_test):
-            """Método a sobrescribir en cada subclase"""
+            """
+            Método abstracto para ejecutar el modelo de forma personalizada.
+
+            Args:
+                X_train: Datos de entrenamiento.
+                y_train: Etiquetas de entrenamiento.
+                X_val: Datos de validación.
+                y_val: Etiquetas de validación.
+                X_test: Datos de prueba.
+            """
             raise NotImplementedError
 
-        
     def load(self, loader, config_yml=None):
-        config_dict = loader.read_yml(self.config_yml_path)
+        """
+        Carga y preprocesa los datos según la configuración YAML o diccionario.
 
+        Args:
+            loader (DataLoader): Objeto para cargar datos.
+            config_yml (str, optional): Ruta al archivo YAML de configuración.
+
+        Returns:
+            tuple: (rom_config, data_after_split)
+                rom_config (dict): Configuración del modelo ROM.
+                data_after_split (list): Datos procesados y divididos.
+        """
+        config_dict = loader.read_yml(self.config_yml_path)
         inputs_file_path = config_dict['data inputs']
         outputs_file_path = config_dict['data outputs']
+        output_folder = config_dict['output folder']
         data_source = config_dict['read mode']
         preprocessed_data_path = config_dict['preprocessed data path']
         validation_mode = config_dict['validation mode']
@@ -79,8 +129,7 @@ class idkROM(ABC):
         eval_metrics = config_dict['eval metrics']
         default_params = loader.default_params
 
-        preprocessor = Pre(model_name)
-        self.output_folder = preprocessor.output_folder
+        self.output_folder = output_folder
 
         if data_source == "raw":
             # 1. Cargar datos
@@ -96,9 +145,10 @@ class idkROM(ABC):
                 for col in outputs_df.columns
             }
 
+            preprocessor = Pre(model_name, self.output_folder)
 
             # 2. Preprocesar con escalers individuales si hay
-            data_after_split, self.input_scaler, self.output_scaler = preprocessor.pre_process_data(
+            data_after_split, self.input_scaler, self.output_scaler, self.output_folder = preprocessor.pre_process_data(
                 inputs_df, outputs_df, discrete_inputs,
                 test_set_size, validation_set_size,
                 imputer, scaler, filter_method,
@@ -116,7 +166,7 @@ class idkROM(ABC):
             print(f"Datos preprocesados cargados.")
 
             # Si cargas datos preprocesados, asegúrate de cargar el dict de scalers también:
-            scaler_path = os.path.join(preprocessor.output_folder, "output_scaler.pkl")
+            scaler_path = os.path.join(self.output_folder, "output_scaler.pkl")
             import joblib
             self.output_scaler = joblib.load(scaler_path)
 
@@ -136,17 +186,25 @@ class idkROM(ABC):
         print(f"\nConfiguracion del ROM: {rom_config}")
         return rom_config, data_after_split
 
-
-
     def train_and_predict(self, rom_config, data_after_split, only_train=False):
         """
-        Instancia y entrena el modelo ROM utilizando la fábrica de modelos.
+        Instancia y entrena el modelo ROM utilizando la configuración proporcionada.
+
+        Args:
+            rom_config (dict): Configuración del modelo ROM.
+            data_after_split (list): Datos procesados y divididos.
+            only_train (bool): Si es True, solo entrena sin predecir.
+
+        Returns:
+            tuple: (y_pred, model)
+                y_pred: Predicciones del modelo sobre el conjunto de prueba.
+                model: Instancia del modelo entrenado.
         """
         model_name = rom_config['model_name']
         validation_mode = rom_config['validation_mode']
 
         if model_name == "neural_network":
-            from idkrom.architectures.nn_simplified import NeuralNetworkROM
+            from idkrom.architectures.neural_network import NeuralNetworkROM
             model = NeuralNetworkROM(rom_config, self.random_state)
         elif model_name == "gaussian_process":
             from idkrom.architectures.gaussian_process import GaussianProcessROM
@@ -168,12 +226,18 @@ class idkROM(ABC):
         y_pred = model.predict(data_after_split[2]) # X_test
 
         return y_pred, model
-    
-
 
     def evaluate(self, y_test_df, y_pred_arr, rom_config: dict):
         """
-        Evaluates the model and saves metrics to a JSON file and a TXT file with detailed errors.
+        Evalúa el modelo y guarda métricas y errores en archivos.
+
+        Args:
+            y_test_df (pd.DataFrame): Valores verdaderos del conjunto de prueba.
+            y_pred_arr (np.ndarray): Predicciones del modelo.
+            rom_config (dict): Configuración del modelo ROM.
+
+        Returns:
+            dict: Diccionario con la métrica principal calculada.
         """
         # Convert to numpy
         y_test_np = y_test_df.to_numpy()
@@ -213,6 +277,17 @@ class idkROM(ABC):
         y_test_orig = np.vstack(y_test_orig).T
         y_pred_orig = np.vstack(y_pred_orig).T
 
+        # Guardar CSV con predicciones
+        pred_df = pd.DataFrame(y_pred_orig, columns=y_test_df.columns)
+        pred_df.to_csv(os.path.join(self.output_folder, "predicciones_test.csv"), index=False)
+
+        # Guardar CSV con valores esperados
+        true_df = pd.DataFrame(y_test_orig, columns=y_test_df.columns)
+        true_df.to_csv(os.path.join(self.output_folder, "valores_esperados_test.csv"), index=False)
+
+        print(f"Predicciones guardadas en {os.path.join(self.output_folder, 'predicciones_test.csv')}")
+        print(f"Valores esperados guardados en {os.path.join(self.output_folder, 'valores_esperados_test.csv')}")
+
         if rom_config['eval_metrics'] == 'mse':
             mse_orig = float(np.mean((y_pred_orig - y_test_orig)**2))
             results['MSE_original'] = mse_orig
@@ -232,15 +307,20 @@ class idkROM(ABC):
         def format_num(num, threshold_low=1e-4, threshold_high=1e4, decimals=6):
             """
             Formatea num en notación científica si es mayor que threshold_high o menor que threshold_low.
+
+            Args:
+                num (float): Número a formatear.
+                threshold_low (float): Umbral inferior para notación científica.
+                threshold_high (float): Umbral superior para notación científica.
+                decimals (int): Decimales a mostrar.
+
+            Returns:
+                str: Número formateado.
             """
             if abs(num) != 0 and (abs(num) < threshold_low or abs(num) > threshold_high):
                 return f"{num:.{decimals}e}"
             return f"{num:.{decimals}f}"
 
-
-        # ========================
-        # Save detailed errors to TXT (with means)
-        # ========================
         txt_path = os.path.join(self.output_folder, "predictions_errors.txt")
 
         with open(txt_path, "w", encoding="utf-8") as f:
@@ -283,11 +363,13 @@ class idkROM(ABC):
 
         print(f"Errores individuales guardados en {txt_path}")
 
-
         # ========================
         # Error graphs 
         # ========================
-        errors = ErrorMetrics(self, rom_config, pd.DataFrame(y_test_orig, columns=y_test_df.columns), y_pred_orig)
+        errors = ErrorMetrics(self, rom_config, y_test=pd.DataFrame(y_test_orig, columns=y_test_df.columns),
+                               y_pred=y_pred_orig,
+                                 y_test_scaled=y_test_np,
+                                   y_pred_scaled=y_pred_np)
         try:
             errors.create_error_graphs()
         except Exception as e:
@@ -304,9 +386,16 @@ class idkROM(ABC):
 
         return {'metric': results.get('MSE_scaled', None) if rom_config['eval_metrics']=='mse' else results.get('MAE_scaled', None)}
 
+    def run(self, config_yml):
+        """
+        Ejecuta el pipeline completo: carga, entrenamiento, predicción y evaluación.
 
+        Args:
+            config_yml (str): Ruta al archivo YAML de configuración.
 
-    def run(self, config_yml): # runear un modelo para obtener un simple predict
+        Returns:
+            dict: Métrica principal obtenida tras la evaluación.
+        """
         loader = DataLoader()
         rom_config, data_after_split = self.load(loader, config_yml)
         y_pred, self.model = self.train_and_predict(rom_config, data_after_split)
@@ -314,27 +403,19 @@ class idkROM(ABC):
 
         return metric
 
+    def idk_run(self, dict_hyperparams=None):
+        """
+        Ejecuta el pipeline completo con hiperparámetros arbitrarios.
 
-    def idk_run(self, dict_hyperparams=None): # runear un modelo con parametros arbitrarios
+        Args:
+            dict_hyperparams (dict, optional): Diccionario de hiperparámetros para actualizar el YAML.
 
+        Returns:
+            dict: Métrica principal obtenida tras la evaluación.
+        """
         if dict_hyperparams is not None:
             loader = DataLoader()
             loader.actualizar_yaml(self.config_yml_path, dict_hyperparams) # actualizar el config.yml con los parametros de dict_hyperparams
         metric = self.run(self.config_yml_path)
 
         return metric
-
-    
-    
-    def rom_training_pipeline(self, data):
-        # importar datos
-        # preprocesamiento datos
-        # crear modelo con hiperparametros
-        # entrenar modelo
-        # guardar modelo
-        loader = DataLoader()
-    
-        loader.actualizar_yaml(self.config_yml_path, data)
-        rom_config, data_after_split = self.load(loader, self.config_yml_path)
-        model_path = self.create_model(rom_config, data_after_split, only_train=True)
-        return model_path

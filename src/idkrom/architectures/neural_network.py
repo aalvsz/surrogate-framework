@@ -4,11 +4,80 @@ import joblib
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import KFold
-from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler
-from torch.optim.lr_scheduler import StepLR
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau
 import torch.optim as optim
 from idkrom.model import idkROM
+
+import torch
+import torch.nn as nn
+
+class FeedforwardNet(nn.Module):
+    """
+    Red neuronal feedforward configurable para regresión.
+
+    Args:
+        input_dim (int): Dimensión de entrada.
+        output_dim (int): Dimensión de salida.
+        n_layers (int): Número de capas ocultas.
+        n_neurons (int): Neuronas por capa oculta.
+        activation (str): Función de activación para capas ocultas.
+        dropout_rate (float): Tasa de dropout.
+        output_activation (str, opcional): Activación de la capa de salida.
+    """
+    def __init__(self, input_dim, output_dim, n_layers, n_neurons, activation, dropout_rate, output_activation=None):
+        """
+        Inicializa la red neuronal feedforward.
+
+        Args:
+            input_dim (int): Dimensión de entrada.
+            output_dim (int): Dimensión de salida.
+            n_layers (int): Número de capas ocultas.
+            n_neurons (int): Neuronas por capa oculta.
+            activation (str): Función de activación para capas ocultas.
+            dropout_rate (float): Tasa de dropout.
+            output_activation (str, opcional): Activación de la capa de salida.
+        """
+        super().__init__()
+
+        activations = {
+            'tanh': nn.Tanh,
+            'relu': nn.ReLU,
+            'sigmoid': nn.Sigmoid,
+            'leakyrelu': nn.LeakyReLU,
+        }
+
+        layers = []
+        current_dim = input_dim
+
+        # Capas ocultas
+        for i in range(n_layers):
+            layers.append(nn.Linear(current_dim, n_neurons))
+            layers.append(activations[activation.lower()]())
+            layers.append(nn.Dropout(dropout_rate))
+            current_dim = n_neurons
+
+        # Capa de salida
+        layers.append(nn.Linear(current_dim, output_dim))
+
+        # Activación de salida (opcional)
+        if output_activation and output_activation.lower() in activations:
+            layers.append(activations[output_activation.lower()]())
+
+        self.net = nn.Sequential(*layers)
+
+    def forward(self, x):
+        """
+        Propaga la entrada a través de la red.
+
+        Args:
+            x (torch.Tensor): Tensor de entrada.
+
+        Returns:
+            torch.Tensor: Salida de la red.
+        """
+        return self.net(x)
+
+
 
 class NeuralNetworkROM(idkROM.Modelo):
     """
@@ -56,6 +125,7 @@ class NeuralNetworkROM(idkROM.Modelo):
             self.lr_step = int(hyperparams['lr_step'])
             self.lr_decrease_rate = float(hyperparams['lr_decrease_rate'])
             self.activation_function_name = hyperparams['activation']
+            self.output_layer_activation = hyperparams['output activation']
             self.dropout = float(hyperparams['dropout_rate'])
             self.optimizer_name = hyperparams['optimizer']
             self.num_epochs = int(hyperparams['epochs'])
@@ -90,6 +160,12 @@ class NeuralNetworkROM(idkROM.Modelo):
     def _get_optimizer(self, model):
         """
         Crea un optimizador para los parámetros del modelo proporcionado.
+
+        Args:
+            model (torch.nn.Module): Modelo de PyTorch.
+
+        Returns:
+            torch.optim.Optimizer: Optimizador configurado.
         """
         if model is None:
             raise ValueError("Se intentó crear un optimizador sin un modelo válido.")
@@ -109,9 +185,15 @@ class NeuralNetworkROM(idkROM.Modelo):
         return optimizer
 
 
-    def _get_activation_function(self):
+    def _get_activation_function(self, output_layer=False):
         """
         Devuelve la instancia de la función de activación especificada.
+
+        Args:
+            output_layer (bool): Si True, devuelve la activación de la capa de salida.
+
+        Returns:
+            torch.nn.Module: Instancia de la función de activación.
         """
         activations = {
             'tanh': torch.nn.Tanh(),
@@ -119,50 +201,50 @@ class NeuralNetworkROM(idkROM.Modelo):
             'sigmoid': torch.nn.Sigmoid(),
             'leakyrelu': torch.nn.LeakyReLU(),
         }
-        try:
-            # Busca ignorando mayúsculas/minúsculas
-            return activations[self.activation_function_name.lower()]
-        except KeyError:
-            raise ValueError(f"Función de activación desconocida: {self.activation_function_name}")
-    
+        if not output_layer:
+            try:
+                # Busca ignorando mayúsculas/minúsculas
+                return activations[self.activation_function_name.lower()]
+            except KeyError:
+                raise ValueError(f"Función de activación desconocida: {self.activation_function_name}")
+        else:
+            try:
+                # Busca ignorando mayúsculas/minúsculas
+                return activations[self.output_layer_activation.lower()]
+            except KeyError:
+                raise ValueError(f"Función de activación desconocida: {self.output_layer_activation}")
+
 
     def _crear_red_neuronal(self):
         """
-        Construye la red neuronal feedforward basada en los parámetros de la instancia.
-        La última capa usa Softplus para que la salida sea siempre positiva.
+        Crea una instancia de la red neuronal feedforward con los parámetros actuales.
+
+        Returns:
+            FeedforwardNet: Red neuronal configurada.
         """
-        layers = []
-        current_dim = self.input_dim
-        actual_neurons = max(1, self.neurons_per_layer)
-
-        # Entrada -> primera oculta
-        if self.hidden_layers > 0:
-            layers.append(torch.nn.Linear(current_dim, actual_neurons))
-            layers.append(self._get_activation_function())
-            layers.append(torch.nn.Dropout(self.dropout))
-            current_dim = actual_neurons
-
-        # Capas ocultas intermedias
-        for _ in range(self.hidden_layers - 1):
-            layers.append(torch.nn.Linear(current_dim, actual_neurons))
-            layers.append(self._get_activation_function())
-            layers.append(torch.nn.Dropout(self.dropout))
-            current_dim = actual_neurons
-
-        # Capa de salida
-        layers.append(torch.nn.Linear(current_dim, self.output_dim))
-
-        # Activación final que fuerza valores ≥ 0
-        layers.append(torch.nn.ReLU())
-
-        return torch.nn.Sequential(*layers)
-
+        return FeedforwardNet(
+            input_dim=self.input_dim,
+            output_dim=self.output_dim,
+            n_layers=self.hidden_layers,
+            n_neurons=self.neurons_per_layer,
+            activation=self.activation_function_name,
+            dropout_rate=self.dropout,
+            output_activation=self.output_layer_activation
+        )
 
 
     def _train_epoch(self, model, optimizer, X_tensor, y_tensor):
         """
         Ejecuta un ciclo de entrenamiento (una época) sobre los datos en mini-batches.
-        Usa el batch_size almacenado en self.batch_size.
+
+        Args:
+            model (torch.nn.Module): Modelo a entrenar.
+            optimizer (torch.optim.Optimizer): Optimizador.
+            X_tensor (torch.Tensor): Datos de entrada.
+            y_tensor (torch.Tensor): Datos objetivo.
+
+        Returns:
+            float: Pérdida promedio de la época.
         """
         model.train() # Asegura modo entrenamiento (activa dropout, etc.)
         total_loss = 0.0
@@ -211,6 +293,8 @@ class NeuralNetworkROM(idkROM.Modelo):
             y_train (pd.DataFrame o np.ndarray): Datos objetivo de entrenamiento.
             X_val (pd.DataFrame o np.ndarray, opcional): Datos de entrada de validación.
             y_val (pd.DataFrame o np.ndarray, opcional): Datos objetivo de validación.
+            validation_mode (str): 'cross' para CV, 'single' para validación explícita.
+            save_interval (int): Frecuencia para guardar el modelo (no implementado).
         """
         self.X_train = X_train # Guarda referencia si la necesitas después
         self.y_train = y_train

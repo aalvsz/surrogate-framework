@@ -1,3 +1,46 @@
+
+data:
+  input: C:\Users\aalvarezsanz\OneDrive - DanobatGroup\Documentos\idk_framework\DOE_datos\Carga carro\inputs.csv
+  output: C:\Users\aalvarezsanz\OneDrive - DanobatGroup\Documentos\idk_framework\DOE_datos\Carga carro\outputs.csv
+
+preprocess:
+  read mode: raw
+  preprocessed data path: None
+  validation mode: single # single to use X_val and y_val, cross for cross-validation
+  imputer: simple # simple, missing indicator or knn
+  scaler: minmax # minmax, standard or robust
+  filter method: isolation forest # isolation forest, lof (local outlier factor) or iqr (interquartile range)
+  test size: 0.10
+  validation size: 0.10
+
+
+evaluate:
+  output folder: D:\idk_framework\idksimulation\results
+  metrics: mse
+  
+model:
+  type: neural_network
+  discrete inputs: [N_trans]
+  hyperparams:
+    mode: manual
+    params:
+      n_layers: 2
+      n_neurons: 128
+      activation: ReLU
+      output activation: 
+      dropout_rate: 0.1
+      optimizer: Adam
+      learning_rate: 0.001
+      lr_step: 200
+      lr_decrease_rate: 0.5
+      epochs: 1000
+      batch_size: 64
+      patience: 100
+      cv_folds: 5
+      convergence_threshold: 1e-09
+
+
+
 idk_params:
 
   input_data: [data, input]
@@ -55,112 +98,4 @@ idk_params:
   tolerance: [model, hyperparams, params, tolerance]
   C: [model, hyperparams, params, C]
   epsilon: [model, hyperparams, params, epsilon]
-
-
-data:
-  input: C:\Users\aalvarezsanz\OneDrive - DanobatGroup\Documentos\idk_framework\DOE_datos\Carga carro\inputs.csv
-  output: C:\Users\aalvarezsanz\OneDrive - DanobatGroup\Documentos\idk_framework\DOE_datos\Carga carro\outputs.csv
-
-preprocess:
-  read mode: raw
-  preprocessed data path: None
-  validation mode: single # single to use X_val and y_val, cross for cross-validation
-  imputer: simple # simple, missing indicator or knn
-  scaler: minmax # minmax, standard or robust
-  scaler path: results
-  filter method: isolation forest # isolation forest, lof (local outlier factor) or iqr (interquartile range)
-  test size: 0.10
-  validation size: 0.10
-
-model:
-  type: neural_network
-  discrete inputs: [N_trans]
-  hyperparams:
-    mode: manual
-    params:
-      n_layers: 2
-      n_neurons: 128
-      activation: ReLU
-      dropout_rate: 0.1
-      optimizer: Adam
-      learning_rate: 0.001
-      lr_step: 200
-      lr_decrease_rate: 0.5
-      #loss: [mse, mae, mape]
-      epochs: 1000
-      batch_size: 64
-      patience: 100
-      cv_folds: 5
-      convergence_threshold: 1e-09
-
-evaluate:
-  metrics: mse
-  plot: true
-  save: true
-
-
-
-
-#  type: gaussian_process
-#  discrete inputs: [N_trans]
-#  hyperparams:
-#    mode: manual
-#    params:
-#      n_iter: 10 # only if mode: best
-#      cv: 5 # only if mode: best
-#
-#      kernel_gp: RBF
-#      constant_kernel: 2
-#      matern_nu: 1.5 # only if kernel: Matern
-#      expsine_periodicity: 1.0 # only if kernel: ExpSineSquared
-#      alpha_gp: 0.0001
-#      optimizer_gp: fmin_l_bfgs_b
-#      n_restarts_optimizer: 0
-#      #loss: [mse, mae, mape]
-
-
-#  type: rbf
-#  hyperparams:
-#    mode: manual
-#    params:
-#      n_iter: 10 # only if mode: best
-#      cv: 5 # only if mode: best
-#      alpha_rbf: 1.0
-#      kernel_rbf: linear
-#      gamma_rbf: None
-#      degree_rbf: 3
-#      #loss: [mse, mae, mape]
-#      #metrics: [mae, mse, mape]
-
-
-#  type: response_surface
-#  hyperparams:
-#    mode: manual
-#    params:
-#      n_iter: 10 # only if mode: best
-#      cv: 5 # only if mode: best
-#
-#      degree_rs: 2
-#      interaction_only: false
-#      include_bias: true
-#      order: C
-#      fit_intercept: true
-#      positive: false
-#      #loss: [mse, mae, mape]
-
-#  type: svr
-#  hyperparams:
-#    mode: manual
-#    params:
-#      n_iter: 10 # only if mode: best
-#      cv: 5 # only if mode: best
-#
-#      kernel_svr: rbf
-#      degree_svr: 3
-#      gamma_svr: scale
-#      tolerance: 0.0001
-#      C: 1.0
-#      epsilon: 0.3
-#      #loss: [mse, mae, mape]
-
 

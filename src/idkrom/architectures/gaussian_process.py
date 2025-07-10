@@ -8,8 +8,21 @@ import joblib
 from idkrom.model import idkROM
 
 class GaussianProcessROM(idkROM.Modelo):
+    """
+    Modelo de Proceso Gaussiano para regresión, basado en scikit-learn.
+
+    Permite configurar diferentes kernels, realizar validación cruzada o explícita,
+    y realizar predicciones y desescalado de resultados.
+    """
 
     def __init__(self, rom_config, random_state):
+        """
+        Inicializa el modelo de Proceso Gaussiano con los hiperparámetros y configuración proporcionados.
+
+        Args:
+            rom_config (dict): Diccionario de configuración del modelo ROM.
+            random_state (int): Semilla para reproducibilidad.
+        """
         super().__init__(rom_config, random_state)
         
         # Extraer parámetros de configuración
@@ -21,7 +34,6 @@ class GaussianProcessROM(idkROM.Modelo):
         self.optimizer = rom_config['hyperparams']['optimizer_gp']
         self.random_state = random_state
    
-        
         self.model_name = rom_config['model_name']
         self.output_folder = rom_config['output_folder']
 
@@ -44,7 +56,6 @@ class GaussianProcessROM(idkROM.Modelo):
         self.y_train = None
         self.X_val = None
         self.y_val = None
-
 
     def train(self, X_train, y_train, X_val=None, y_val=None, validation_mode='cross'):
         """
@@ -103,7 +114,6 @@ class GaussianProcessROM(idkROM.Modelo):
             print("Entrenando con datos de validación explícitos.")
             self.model.fit(X_train, y_train)
 
-
     def predict(self, X_test):
         """
         Realiza predicciones con el modelo entrenado.
@@ -117,7 +127,6 @@ class GaussianProcessROM(idkROM.Modelo):
         y_pred, std_dev = self.model.predict(X_test, return_std=True)
         print(f"Standard deviation is {np.mean(std_dev):.4f}")
         return y_pred
-
 
     def idk_run(self, X_params_dict):
         """

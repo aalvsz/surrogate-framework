@@ -8,7 +8,7 @@ src/idkrom.egg-info/dependency_links.txt
 src/idkrom.egg-info/top_level.txt
 src/idkrom/architectures/__init__.py
 src/idkrom/architectures/gaussian_process.py
-src/idkrom/architectures/nn_simplified.py
+src/idkrom/architectures/neural_network.py
 src/idkrom/architectures/nn_skorch.py
 src/idkrom/architectures/polynomial_response_surface.py
 src/idkrom/architectures/rbf.py
@@ -18,6 +18,9 @@ src/idkrom/gui/main_window.py
 src/idkrom/loader/__init__.py
 src/idkrom/loader/csv_divider.py
 src/idkrom/loader/import_data.py
+src/idkrom/pre/__init__.py
+src/idkrom/pre/preprocessing.py
 src/idkrom/utils/__init__.py
 src/idkrom/utils/metrics.py
 src/idkrom/utils/save_model.py
+tests/test_idkrom.py

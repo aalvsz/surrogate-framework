@@ -3,3 +3,4 @@ data/
 docs/
 site/
 virtual_env/
+__pychache__/

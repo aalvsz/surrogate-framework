@@ -5,21 +5,31 @@ from ruamel.yaml import YAML
 
 class DataLoader:
     """
-    Clase encargada de importar los datos desde un archivo CSV.
-    
+    Clase encargada de importar los datos desde archivos y leer configuraciones.
+
     Permite cargar datos en dos formatos:
       - 'raw': datos crudos que serán preprocesados (se aplica normalización, eliminación de outliers, etc.).
       - 'processed': datos ya preprocesados.
+    También permite leer archivos YAML de configuración y actualizar parámetros.
     """
+
     def __init__(self):
+        """
+        Inicializa el DataLoader.
+        """
         self.results_path = None
         self.default_params = None
         self.config = None
-        pass
 
     def read_yml(self, config_path: str):
         """
-        Lee el archivo YAML de configuración y devuelve las variables asociadas.
+        Lee el archivo YAML de configuración y devuelve las variables asociadas en un diccionario plano.
+
+        Args:
+            config_path (str): Ruta al archivo YAML de configuración.
+
+        Returns:
+            dict: Diccionario con las variables de configuración extraídas del YAML.
         """
         with open(config_path, 'r') as file:
             config = yaml.safe_load(file)
@@ -50,10 +60,10 @@ class DataLoader:
 
         # Evaluacion
         evaluate = config['evaluate']
+        output_folder = evaluate.get('output folder', None)
         metrics = evaluate.get('metrics', 'mse')
         plot = evaluate.get('plot', 'True')
         save = evaluate.get('save', 'True')
-
 
         # Definir hiperparámetros por defecto
         self.default_params = {
@@ -65,7 +75,7 @@ class DataLoader:
                 'learning_rate': 0.001,
                 'lr_step': 500,
                 'lr_decrease_rate': 0.1,
-                #'loss': 'mse',
+                # 'loss': 'mse',
                 'epochs': 1000,
                 'batch_size': 32,
                 'patience': 50,
@@ -89,8 +99,16 @@ class DataLoader:
             }
         }
 
-        # Función para convertir una cadena con opciones separadas por '|' en una lista
         def parse_options(value):
+            """
+            Convierte una cadena con opciones separadas por '|' en una lista, o en número si corresponde.
+
+            Args:
+                value (str): Valor a convertir.
+
+            Returns:
+                list, int, float o str: Valor convertido.
+            """
             if isinstance(value, str):
                 if '|' in value:
                     options = value.split('|')
@@ -132,15 +150,23 @@ class DataLoader:
             'mode': mode,
             'discrete inputs': discrete_inputs,
             'hyperparams': hyper_params,
-            'eval metrics': metrics,
-            'plot': plot,
-            'save': save
+            'output folder': output_folder,
+            'eval metrics': metrics
         }
 
-
     def load_data(self, inputs_path=None, outputs_path=None, data_source="raw"):
-        
+        """
+        Carga los datos de entrada y salida desde archivos CSV o Parquet, según el modo.
 
+        Args:
+            inputs_path (str, optional): Ruta al archivo de entradas o carpeta de datos procesados.
+            outputs_path (str, optional): Ruta al archivo de salidas.
+            data_source (str): 'raw' para datos crudos, 'pre' para datos preprocesados.
+
+        Returns:
+            tuple: Si 'raw': (df_inputs, df_outputs)
+                   Si 'pre': (X_train, y_train, X_val, y_val, X_test, y_test)
+        """
         if data_source.lower() == "raw":
             # Nos quedamos con el directorio (sin el nombre del archivo)
             self.results_path = os.path.dirname(os.path.dirname(inputs_path))
@@ -153,23 +179,29 @@ class DataLoader:
             return df_inputs, df_outputs
 
         else:
-
-            # Asumimos que los CSV ya contienen los datos preprocesados
-            X_train = pd.read_parquet(os.path.join(inputs_path, 'X_train.parquet'), sep=",")
-            y_train = pd.read_parquet(os.path.join(inputs_path, 'y_train.parquet'), sep=",")
-            X_val   = pd.read_parquet(os.path.join(inputs_path, 'X_val.parquet'), sep=",")
-            y_val   = pd.read_parquet(os.path.join(inputs_path, 'y_val.parquet'), sep=",")
-            X_test  = pd.read_parquet(os.path.join(inputs_path, 'X_test.parquet'), sep=",")
-            y_test  = pd.read_parquet(os.path.join(inputs_path, 'y_test.parquet'), sep=",")
+            # Asumimos que los Parquet ya contienen los datos preprocesados
+            X_train = pd.read_parquet(os.path.join(inputs_path, 'X_train.parquet'))
+            y_train = pd.read_parquet(os.path.join(inputs_path, 'y_train.parquet'))
+            X_val   = pd.read_parquet(os.path.join(inputs_path, 'X_val.parquet'))
+            y_val   = pd.read_parquet(os.path.join(inputs_path, 'y_val.parquet'))
+            X_test  = pd.read_parquet(os.path.join(inputs_path, 'X_test.parquet'))
+            y_test  = pd.read_parquet(os.path.join(inputs_path, 'y_test.parquet'))
             
             return X_train, y_train, X_val, y_val, X_test, y_test
-
 
     def actualizar_yaml(self, config_yml_path, dict_hyperparams):
         """
         Actualiza un archivo YAML con los valores proporcionados en dict_hyperparams,
         siguiendo las rutas especificadas en la sección idk_params del YAML.
         Preserva comentarios y formato original del archivo.
+
+        Args:
+            config_yml_path (str): Ruta al archivo YAML a actualizar.
+            dict_hyperparams (dict): Diccionario de hiperparámetros a actualizar.
+
+        Raises:
+            FileNotFoundError: Si el archivo YAML no existe.
+            KeyError: Si la sección 'idk_params' no existe en el YAML.
         """
         # 1) Verificar que el archivo existe
         if not os.path.exists(config_yml_path):
@@ -225,7 +257,9 @@ class DataLoader:
         print(f"Archivo {config_yml_path} actualizado correctamente preservando formato y comentarios")
             
 if __name__ == "__main__":
-
+    """
+    Ejemplo de uso: Lee un archivo YAML de configuración y muestra los parámetros extraídos.
+    """
     # TESTEAR LA LECTURA DEL YAML ################################################################################################################
 
     # Ruta al archivo YAML de prueba
@@ -239,4 +273,4 @@ if __name__ == "__main__":
     print(config_dict)
     print(f"\nDiccionario de hiperparámetros: {config_dict['hyperparams']}")
     print(f"Parametros por defecto: {data_loader.default_params}")
-    print(f"Parametros por defecto Neural Network: {data_loader.default_params['neural_network']}")
+    print(f"Parametros por defecto Neural Network:{data_loader.default_params['neural_network']}")
