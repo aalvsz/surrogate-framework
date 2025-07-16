@@ -52,4 +52,4 @@ SVR_dict_hyperparams = {'tolerance': 1e-4, 'epsilon': 0.3}
 
 # Instancia y ejecución principal del pipeline
 rom_instance = idkROM(random_state, config_yml_path="D:\idk_framework\idkROM\src\config.yml")
-rom_instance.idk_run(dict_hyperparams=None)
+rom_instance.run_idkROM(dict_hyperparams=None)

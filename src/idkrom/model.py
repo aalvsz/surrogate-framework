@@ -403,7 +403,7 @@ class idkROM(ABC):
 
         return metric
 
-    def idk_run(self, dict_hyperparams=None):
+    def run_idkROM(self, dict_hyperparams=None):
         """
         Ejecuta el pipeline completo con hiperparámetros arbitrarios.
 
