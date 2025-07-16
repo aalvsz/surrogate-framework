@@ -1,2 +1,1 @@
-virtual_env/
-__pychache__/
+.pytest_cache/
