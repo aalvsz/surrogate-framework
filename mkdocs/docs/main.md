@@ -11,9 +11,9 @@ Podemos usar los comandos
 
 ```
 pip install "idksimulation @ git+https://kodea.danobatgroup.com/dip/precision/ideko/simulation/idksimulation.git@main"
-pip install "idkrom @ git+https://kodea.danobatgroup.com/dip/precision/ideko/simulation/idkROM.git@test-package"
-pip install "idkdoe @ git+https://kodea.danobatgroup.com/dip/precision/ideko/simulation/idkdoe.git@test-package"
-pip install "idkopt @ git+https://kodea.danobatgroup.com/dip/precision/ideko/simulation/idkopt.git@test-package"
+pip install "idkrom @ git+https://kodea.danobatgroup.com/dip/precision/ideko/simulation/idkROM.git@main"
+pip install "idkdoe @ git+https://kodea.danobatgroup.com/dip/precision/ideko/simulation/idkdoe.git@main"
+pip install "idkopt @ git+https://kodea.danobatgroup.com/dip/precision/ideko/simulation/idkopt.git@main"
 
 ```
 accediendo con nuestras credenciales de Kodea.

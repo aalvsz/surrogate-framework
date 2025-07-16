@@ -1,8 +1,7 @@
 site_name: idkROM Documentation
 
 nav:
-  - Home: index.md
-  - Description: descriptions.md
+  - Home: descriptions.md
   - How to: main.md
   - Preprocessing: 
       - Data divider: pre/csv_div.md
