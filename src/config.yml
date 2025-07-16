@@ -27,7 +27,7 @@ model:
       n_layers: 2
       n_neurons: 128
       activation: ReLU
-      output activation: 
+      output activation:
       dropout_rate: 0.1
       optimizer: Adam
       learning_rate: 0.001

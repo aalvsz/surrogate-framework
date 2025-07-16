@@ -118,7 +118,7 @@ class idkROM(ABC):
         validation_mode = config_dict['validation mode']
         imputer = config_dict['imputer']
         scaler = config_dict['scaler']
-        scaler_path = config_dict['scaler path']
+        #scaler_path = config_dict['scaler path']
         filter_method = config_dict['filter method']
         test_set_size = config_dict['test size']
         validation_set_size = config_dict['validation size']

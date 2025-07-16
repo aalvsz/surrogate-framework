@@ -45,7 +45,7 @@ class DataLoader:
         validation_mode = preprocess.get('validation mode', 'cross')
         imputer = preprocess.get('imputer', 'simple')
         scaler = preprocess.get('scaler', 'minmax')
-        scaler_path = os.path.join(os.getcwd(), preprocess.get('scaler path', None))
+        #scaler_path = os.path.join(os.getcwd(), preprocess.get('scaler path', None))
         filter_method = preprocess.get('filter method', 'isolation forest')
         validation = preprocess.get('validation', 'single')
         test_size = preprocess.get('test size', 0.15)
@@ -141,7 +141,7 @@ class DataLoader:
             'validation mode': validation_mode,
             'imputer': imputer,
             'scaler': scaler,
-            'scaler path': scaler_path,
+            #'scaler path': scaler_path,
             'filter method': filter_method,
             'validation': validation,
             'test size': test_size,
